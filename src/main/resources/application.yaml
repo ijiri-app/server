@@ -21,6 +21,8 @@ jwt:
 oauth:
   kakao:
     app-id: ${KAKAO_APP_ID:0}
+    # 회원 탈퇴 시 카카오 연결 끊기 API 호출용 (콘솔 > 앱 키 > Admin 키)
+    admin-key: ${KAKAO_ADMIN_KEY:}
   google:
     # Android/iOS/Web 클라이언트 ID 를 콤마로 구분해서 모두 넣는다 (ID token 의 aud 검증용)
     client-ids: ${GOOGLE_CLIENT_IDS}

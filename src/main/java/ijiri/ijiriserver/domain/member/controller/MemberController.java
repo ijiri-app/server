@@ -26,13 +26,17 @@ public class MemberController {
 
     @Operation(summary = "내 정보 조회")
     @GetMapping("/me")
-    public BaseResponse<MemberResponse> getMe(@Parameter(hidden = true) @AuthenticationPrincipal String memberId) {
+    public BaseResponse<MemberResponse> getMe(
+            @Parameter(hidden = true) @AuthenticationPrincipal String memberId
+    ) {
         return BaseResponse.ok(memberQueryService.getMember(Long.valueOf(memberId)));
     }
 
-    @Operation(summary = "회원 탈퇴")
+    @Operation(summary = "회원 탈퇴", description = "카카오 회원은 카카오 연결 끊기까지 함께 처리")
     @DeleteMapping("/me")
-    public BaseResponse<Void> withdraw(@Parameter(hidden = true) @AuthenticationPrincipal String memberId) {
+    public BaseResponse<Void> withdraw(
+            @Parameter(hidden = true) @AuthenticationPrincipal String memberId
+    ) {
         memberWithdrawService.withdraw(Long.valueOf(memberId));
         return BaseResponse.of(MemberStatusCode.WITHDRAW_SUCCESS, null);
     }

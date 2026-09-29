@@ -9,7 +9,7 @@ SDK tokens, which the server verifies before issuing its own JWTs.
 1. **Output while working = code only.** During work, produce only code creation/modification.
    Do not narrate the process step by step.
 2. **Review at least once.** After finishing any logic, re-read every changed file at least once
-   and check: correctness, DDD boundaries, SOLID, conventions below, line length, leftovers
+   and check: correctness, SOLID, conventions below, line length, leftovers
    (unused imports, dead code, stale TODOs). Fix what the review finds.
 3. **Verify with `./gradlew test`.** Every change must pass both compilation and runtime
    (context load + tests). Do not report completion until it passes. If it cannot pass
@@ -37,7 +37,7 @@ ijiri.ijiriserver
 │   ├── auth
 │   │   ├── common                shared by all providers
 │   │   │   ├── client            SocialTokenVerifier, SocialUnlinkClient (strategy interfaces)
-│   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (SignInResponse)
+│   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (AuthResponse)
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
 │   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code
@@ -77,18 +77,6 @@ Package rules:
 
 ## Design principles
 
-### DDD
-- Each domain is a bounded context. Other domains are accessed through their **service
-  interface**, never their repositories (e.g. `auth/token` loads a member via `MemberService`,
-  never `MemberRepository`).
-- When calling another domain's service would create a circular dependency, publish a domain
-  event instead (e.g. `MemberWithdrawnEvent`; `auth/token` and `interestcar` listen with
-  `@EventListener` and delete their own rows inside the same transaction).
-- Put behavior that belongs to an entity on the entity (e.g. `RefreshToken.isExpired()`).
-  Services orchestrate; entities hold their own invariants.
-- Entities: no public setters. Change state through intention-revealing methods.
-- Never return entities from controllers; map to a response DTO (`XxxResponse.from(entity)`).
-
 ### SOLID
 - **SRP**: one reason to change per class. External API calls go in `client`,
   orchestration in `service`, HTTP mapping in `controller`.
@@ -122,7 +110,10 @@ Package rules:
 - Domain event: past-tense `XxxEvent` record in `event` (`MemberWithdrawnEvent`).
 - Controller: `XxxController`; for auth providers `XxxAuthController`.
 - External API client: `XxxOAuthClient` / `XxxClient` in `client`.
-- DTO: `XxxRequest` / `XxxResponse`, implemented as Java `record`.
+- DTO: Java `record`. Requests are `XxxRequest` per endpoint. Responses are **one per domain**
+  (`AuthResponse`, `MemberResponse`, `InterestCarResponse`) with static factories per use
+  (`AuthResponse.tokens(...)`, `AuthResponse.message(...)`) and `@JsonInclude(NON_NULL)` when
+  fields are optional. Do not create a new response class per API.
 - Status code enum per domain: `XxxStatusCode implements StatusCode`.
 - Tables: snake_case singular (`member`, `refresh_token`). Unique/index names:
   `uk_<table>_<columns>`, `idx_<table>_<columns>`.
@@ -134,7 +125,7 @@ Package rules:
   own line, aligned with the line that opened it. Calls/annotations that fit on one line
   stay on one line.
   ```java
-  return new OAuthLoginResponse(
+  return new AuthResponse(
           tokens.accessToken(),
           tokens.refreshToken()
   );
@@ -169,11 +160,15 @@ Package rules:
 ### API
 - **Every API response — success AND error — MUST be returned through `BaseResponse<T>`.**
   - Success: `BaseResponse.ok(data)` or `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, data)`
-    (no data: `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, null)`).
+    — `data` is always a response DTO, never `null`.
   - Error: `BaseResponse.onFailure(statusCode[, detail])`, produced only by
     `GlobalExceptionHandler` and the Spring Security handlers in `global/security`.
   - Never return raw DTOs, entities, `ResponseEntity<Dto>`, `void`, or Spring's default
     error body from any endpoint.
+- Every service method called by a controller returns its domain's response DTO, never `void`
+  or a primitive/wrapper. When there is nothing else to return, return a message
+  (e.g. `AuthResponse.message(...)`). Never return entities from controllers. Internal service-to-service
+  methods (e.g. `existsEmailMember`) may return primitives or `void`.
 - Status code format: `<DOMAIN><HTTP status>[<seq>]`, e.g. `AUTH200`, `AUTH4011`, `MEMBER404`.
 - Validate request bodies with `@Valid` + Bean Validation on the request record.
 - Business errors: `throw new CustomException(XxxStatusCode.SOME_ERROR)`.

@@ -1,7 +1,8 @@
 package ijiri.ijiriserver.domain.auth.kakao.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
-import ijiri.ijiriserver.domain.auth.common.dto.SocialUserInfo;
+import ijiri.ijiriserver.domain.auth.common.client.SocialTokenVerifier;
+import ijiri.ijiriserver.domain.auth.common.dto.SocialMemberInfo;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.global.exception.CustomException;
@@ -12,7 +13,7 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
 @Component
-public class KakaoOAuthClient {
+public class KakaoOAuthClient implements SocialTokenVerifier {
 
     private final RestClient restClient = RestClient.create("https://kapi.kakao.com");
     private final long appId;
@@ -21,20 +22,29 @@ public class KakaoOAuthClient {
         this.appId = appId;
     }
 
-    public SocialUserInfo getUserInfo(String accessToken) {
+    @Override
+    public Provider provider() {
+        return Provider.KAKAO;
+    }
+
+    @Override
+    public SocialMemberInfo verify(String accessToken) {
         // 다른 앱에서 발급된 카카오 토큰으로 로그인하는 걸 막기 위해 app_id 확인
         TokenInfo tokenInfo = get("/v1/user/access_token_info", accessToken, TokenInfo.class);
         if (tokenInfo.appId() != appId) {
-            throw new CustomException(AuthStatusCode.INVALID_SOCIAL_TOKEN);
+            throw new CustomException(AuthStatusCode.INVALID_PROVIDER_TOKEN);
         }
 
         KakaoUser user = get("/v2/user/me", accessToken, KakaoUser.class);
         KakaoAccount account = user.kakaoAccount();
-        return new SocialUserInfo(
+        Profile profile = account != null ? account.profile() : null;
+        return new SocialMemberInfo(
                 Provider.KAKAO,
                 String.valueOf(user.id()),
                 account != null ? account.email() : null,
-                account != null && account.profile() != null ? account.profile().nickname() : null);
+                profile != null ? profile.nickname() : null,
+                profile != null && !profile.isDefaultImage() ? profile.profileImageUrl() : null
+        );
     }
 
     private <T> T get(String uri, String accessToken, Class<T> type) {
@@ -44,7 +54,7 @@ public class KakaoOAuthClient {
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
                     .onStatus(status -> status.is4xxClientError(), (req, res) -> {
-                        throw new CustomException(AuthStatusCode.INVALID_SOCIAL_TOKEN);
+                        throw new CustomException(AuthStatusCode.INVALID_PROVIDER_TOKEN);
                     })
                     .body(type);
         } catch (RestClientException e) {
@@ -61,6 +71,10 @@ public class KakaoOAuthClient {
     private record KakaoAccount(String email, Profile profile) {
     }
 
-    private record Profile(String nickname) {
+    private record Profile(
+            String nickname,
+            @JsonProperty("profile_image_url") String profileImageUrl,
+            @JsonProperty("is_default_image") boolean isDefaultImage
+    ) {
     }
 }

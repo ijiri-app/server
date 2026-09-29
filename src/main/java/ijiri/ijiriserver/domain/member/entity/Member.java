@@ -10,34 +10,42 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import lombok.*;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-@AllArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
 @Table(name = "member", uniqueConstraints = @UniqueConstraint(
-        name = "uk_member_provider_provider_user_id",
-        columnNames = {"provider", "provider_user_id"}))
+        name = "uk_member_provider_provider_member_id",
+        columnNames = {"provider", "provider_member_id"}
+))
 public class Member extends BaseTimeEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "email", nullable = true, length = 255)
+    @Column(name = "email", nullable = false)
     private String email;
 
-    @Column(name = "username", nullable = true, length = 100)
+    @Column(name = "username", nullable = false, length = 100)
     private String username;
+
+    @Column(name = "profile_image_url", length = 500)
+    private String profileImageUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 20, updatable = false)
     private Provider provider;
 
-    @Column(name = "provider_member_id", nullable = false, length = 255, updatable = false)
-    private String providerUserId;
+    @Column(name = "provider_member_id", nullable = false, updatable = false)
+    private String providerMemberId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 20)

@@ -10,6 +10,7 @@ public record MemberResponse(
         Provider provider,
         String email,
         String username,
+        String profileImageUrl,
         LocalDateTime createdAt
 ) {
 
@@ -19,6 +20,8 @@ public record MemberResponse(
                 member.getProvider(),
                 member.getEmail(),
                 member.getUsername(),
-                member.getCreatedAt());
+                member.getProfileImageUrl(),
+                member.getCreatedAt()
+        );
     }
 }

@@ -8,5 +8,5 @@ import java.util.Optional;
 
 public interface MemberRepository extends JpaRepository<Member, Long> {
 
-    Optional<Member> findByProviderAndProviderUserId(Provider provider, String providerUserId);
+    Optional<Member> findByProviderAndProviderMemberId(Provider provider, String providerMemberId);
 }

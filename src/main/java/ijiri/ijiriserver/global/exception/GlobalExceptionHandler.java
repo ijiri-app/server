@@ -29,7 +29,8 @@ public class GlobalExceptionHandler {
     // @Valid @RequestBody 검증 실패 -> 필드별 에러 메시지 반환
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<BaseResponse<Map<String, String>>> handleMethodArgumentNotValid(
-            MethodArgumentNotValidException e) {
+            MethodArgumentNotValidException e
+    ) {
         Map<String, String> errors = new LinkedHashMap<>();
         e.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
@@ -39,7 +40,8 @@ public class GlobalExceptionHandler {
     // @PathVariable, @RequestParam 검증 실패
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<BaseResponse<Map<String, String>>> handleConstraintViolation(
-            ConstraintViolationException e) {
+            ConstraintViolationException e
+    ) {
         Map<String, String> errors = new LinkedHashMap<>();
         e.getConstraintViolations()
                 .forEach(v -> errors.putIfAbsent(v.getPropertyPath().toString(), v.getMessage()));

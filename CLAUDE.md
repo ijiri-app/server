@@ -40,8 +40,8 @@ ijiri.ijiriserver
 │   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (SignInResponse)
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code,
-│   │   │   │                     /auth/email/verify (AuthController, EmailVerificationController)
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code
+│   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
 │   │   ├── oauth                 POST /auth/signin/oauth (provider + token), OAuthController
@@ -189,8 +189,9 @@ Package rules:
   and expired rows are purged daily by `RefreshTokenCleanupScheduler`.
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use
   `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
-- Sign-up requires a verified email: 6-char alphanumeric code, valid 10 min, 5 attempts,
-  60 s resend cooldown; a verified email must sign up within 30 min.
+- Sign-up sends the email verification code in the same request: 6-char alphanumeric code
+  bound to that email, valid 10 min, 5 attempts, 60 s resend cooldown, deleted on success
+  (single use).
 - Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
 - Secrets come from `.env` (never commit it). Never log tokens or secrets.
 

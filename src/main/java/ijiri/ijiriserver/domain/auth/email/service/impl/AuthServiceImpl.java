@@ -11,6 +11,7 @@ import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -28,11 +29,14 @@ public class AuthServiceImpl implements AuthService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
 
+    // 틀린 인증 시도 횟수가 가입 실패와 함께 롤백되지 않도록 전체를 하나의 트랜잭션으로 묶지 않는다.
+    // 코드를 쓰기 전에 중복 이메일을 먼저 확인해, 가입이 불가능한 요청으로 코드가 소모되지 않게 한다
     @Override
-    @Transactional
     public SignInResponse signup(SignupRequest request) {
-        // 같은 트랜잭션이라 가입이 실패하면 인증 기록 소모도 롤백되어 다시 가입할 수 있다
-        emailVerificationService.consumeVerified(request.email());
+        if (memberService.existsEmailMember(request.email())) {
+            throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
+        }
+        emailVerificationService.verifyAndConsume(request.email(), request.verificationCode());
         Member member = memberService.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),

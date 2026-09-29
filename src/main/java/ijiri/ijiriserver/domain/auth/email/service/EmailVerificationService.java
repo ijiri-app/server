@@ -4,10 +4,8 @@ public interface EmailVerificationService {
 
     void sendCode(String email);
 
-    void verify(String email, String code);
-
     /**
-     * 인증이 끝난 이메일인지 확인하고 인증 기록을 소모(삭제)한다. 가입 시 한 번만 사용 가능.
+     * 이메일에 발송된 코드와 일치하고 만료되지 않았는지 확인한 뒤 코드를 삭제한다. 코드는 한 번만 사용할 수 있다.
      */
-    void consumeVerified(String email);
+    void verifyAndConsume(String email, String code);
 }

@@ -57,7 +57,6 @@ public class SecurityConfig {
                                 "/auth/signin/oauth",
                                 "/auth/signup",
                                 "/auth/email/verification-code",
-                                "/auth/email/verify",
                                 "/auth/signin",
                                 "/auth/refresh"
                         ).permitAll()

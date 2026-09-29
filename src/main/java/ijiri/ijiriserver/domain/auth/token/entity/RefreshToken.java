@@ -31,13 +31,13 @@ public class RefreshToken {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "member_id", nullable = false)
+    @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(nullable = false, unique = true, length = 64)
+    @Column(name = "token_hash", nullable = false, unique = true, length = 64, updatable = false)
     private String tokenHash;
 
-    @Column(nullable = false)
+    @Column(name = "expires_at", nullable = false, updatable = false)
     private LocalDateTime expiresAt;
 
     public RefreshToken(Long memberId, String token, LocalDateTime expiresAt) {

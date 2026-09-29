@@ -201,12 +201,16 @@ Package rules:
   no trailing period, max 72 chars.
 - Types: `feat`, `fix`, `refactor`, `chore` (build/config), `docs`, `test`, `style`.
 - One commit = one logical change. Group files by that change, not by file type.
-- Commit plan format in the report:
-  ```
-  1. refactor: move RefreshTokenServiceImpl to service/impl
-     - src/main/java/.../auth/token/service/impl/RefreshTokenServiceImpl.java
-  2. docs: add commit convention to CLAUDE.md
-     - CLAUDE.md
+- Commit plan format in the report: ready-to-paste git commands, one `git add` + `git commit`
+  pair per commit, in an order where every commit compiles. Use `git add -A <paths>` so
+  deletions and renames are included. Each command on a single line (never `\` line
+  continuations; pasted trailing spaces break them), one code block per command.
+  ```bash
+  git add -A src/main/java/ijiri/ijiriserver/domain/auth/token
+  git commit -m "refactor: move RefreshTokenServiceImpl to service/impl"
+
+  git add CLAUDE.md
+  git commit -m "docs: add commit convention to CLAUDE.md"
   ```
 
 ## Commands

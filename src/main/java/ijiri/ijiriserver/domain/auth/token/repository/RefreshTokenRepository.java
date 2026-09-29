@@ -13,8 +13,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
 
     Optional<RefreshToken> findByTokenHash(String tokenHash);
 
-    void deleteByTokenHashAndMemberId(String tokenHash, Long memberId);
-
     void deleteAllByMemberId(Long memberId);
 
     @Modifying

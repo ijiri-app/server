@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 "/auth/signup",
                                 "/auth/email/verification-code",
                                 "/auth/signin",
-                                "/auth/refresh"
+                                "/auth/refresh",
+                                "/auth/signout"
                         ).permitAll()
                         .requestMatchers(
                                 "/error"

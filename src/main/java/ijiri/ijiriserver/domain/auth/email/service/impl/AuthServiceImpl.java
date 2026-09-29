@@ -15,6 +15,8 @@ import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -54,5 +56,10 @@ public class AuthServiceImpl implements AuthService {
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_CREDENTIALS));
         return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
+    }
+
+    @Override
+    public AuthResponse signOut(HttpServletRequest request, HttpServletResponse response) {
+        return tokenService.deleteTokens(request, response);
     }
 }

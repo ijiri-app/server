@@ -4,10 +4,12 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthSignInRequest;
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.oauth.service.OAuthService;
+import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class OAuthController {
 
     private final OAuthService oAuthService;
+    private final JwtCookieManager jwtCookieManager;
 
     @Operation(
             summary = "소셜 로그인 (카카오/구글 공용)",
@@ -29,7 +32,12 @@ public class OAuthController {
     )
     @SecurityRequirements
     @PostMapping("/signin/oauth")
-    public BaseResponse<AuthResponse> signIn(@Valid @RequestBody OAuthSignInRequest request) {
-        return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, oAuthService.signIn(request));
+    public BaseResponse<AuthResponse> signIn(
+            @Valid @RequestBody OAuthSignInRequest request,
+            HttpServletResponse httpResponse
+    ) {
+        AuthResponse response = oAuthService.signIn(request);
+        jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
+        return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, response);
     }
 }

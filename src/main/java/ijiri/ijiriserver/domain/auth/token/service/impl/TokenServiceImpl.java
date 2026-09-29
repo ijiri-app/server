@@ -8,8 +8,12 @@ import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.service.MemberService;
+import ijiri.ijiriserver.global.exception.CommonStatusCode;
 import ijiri.ijiriserver.global.exception.CustomException;
+import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -25,6 +29,7 @@ public class TokenServiceImpl implements TokenService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final MemberService memberService;
     private final JwtProvider jwtProvider;
+    private final JwtCookieManager jwtCookieManager;
 
     @Override
     public AuthResponse issue(Member member) {
@@ -53,9 +58,17 @@ public class TokenServiceImpl implements TokenService {
         return issue(memberService.getById(saved.getMemberId()));
     }
 
+    // 1. 헤더 -> 쿠키 순으로 access token 조회  2. 없거나 유효하지 않으면 401
+    // 3. 토큰의 회원 조회  4. 토큰 쿠키 만료  5. 회원의 refresh token 전부 삭제(모든 기기 로그아웃)
     @Override
-    public AuthResponse signOut(Long memberId, String refreshToken) {
-        refreshTokenRepository.deleteByTokenHashAndMemberId(RefreshToken.hash(refreshToken), memberId);
+    public AuthResponse deleteTokens(HttpServletRequest request, HttpServletResponse response) {
+        String accessToken = jwtCookieManager.resolveAccessToken(request)
+                .filter(jwtProvider::validateAccessToken)
+                .orElseThrow(() -> new CustomException(CommonStatusCode.INVALID_TOKEN));
+        Member member = memberService.getById(Long.valueOf(jwtProvider.getSubject(accessToken)));
+
+        jwtCookieManager.expireTokenCookies(response);
+        refreshTokenRepository.deleteAllByMemberId(member.getId());
         return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
     }
 

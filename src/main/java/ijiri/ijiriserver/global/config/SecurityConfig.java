@@ -1,9 +1,7 @@
 package ijiri.ijiriserver.global.config;
 
 import ijiri.ijiriserver.global.jwt.JwtAuthenticationFilter;
-import ijiri.ijiriserver.global.oauth2.CustomAuthorizationRequestResolver;
 import ijiri.ijiriserver.global.oauth2.HttpCookieOAuth2AuthorizationRequestRepository;
-import ijiri.ijiriserver.global.oauth2.apple.AppleAwareTokenResponseClient;
 import ijiri.ijiriserver.global.oauth2.handler.OAuth2FailureHandler;
 import ijiri.ijiriserver.global.oauth2.handler.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
@@ -30,9 +28,7 @@ import java.util.List;
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private final CustomAuthorizationRequestResolver authorizationRequestResolver;
     private final HttpCookieOAuth2AuthorizationRequestRepository authorizationRequestRepository;
-    private final AppleAwareTokenResponseClient tokenResponseClient;
     private final OAuth2SuccessHandler oAuth2SuccessHandler;
     private final OAuth2FailureHandler oAuth2FailureHandler;
 
@@ -59,10 +55,7 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .oauth2Login(oauth2 -> oauth2
-                        .authorizationEndpoint(e -> e
-                                .authorizationRequestResolver(authorizationRequestResolver)
-                                .authorizationRequestRepository(authorizationRequestRepository))
-                        .tokenEndpoint(t -> t.accessTokenResponseClient(tokenResponseClient))
+                        .authorizationEndpoint(e -> e.authorizationRequestRepository(authorizationRequestRepository))
                         .successHandler(oAuth2SuccessHandler)
                         .failureHandler(oAuth2FailureHandler)
                 )

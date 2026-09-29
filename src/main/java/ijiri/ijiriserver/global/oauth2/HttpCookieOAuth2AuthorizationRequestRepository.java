@@ -17,7 +17,6 @@ import java.util.Optional;
 
 /**
  * STATELESS 환경이라 세션 대신 쿠키에 authorization request 를 보관한다.
- * Apple 의 form_post 콜백은 cross-site POST 라서 SameSite=None 이어야 쿠키가 따라온다.
  */
 @Component
 public class HttpCookieOAuth2AuthorizationRequestRepository
@@ -65,7 +64,7 @@ public class HttpCookieOAuth2AuthorizationRequestRepository
                 .path("/")
                 .httpOnly(true)
                 .secure(true)
-                .sameSite("None")
+                .sameSite("Lax")
                 .maxAge(maxAge)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

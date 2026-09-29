@@ -10,7 +10,7 @@ public record GoogleUserInfo(Map<String, Object> attributes) implements OAuth2Us
     }
 
     @Override
-    public String getProviderId() {
+    public String getProviderUserId() {
         return (String) attributes.get("sub");
     }
 

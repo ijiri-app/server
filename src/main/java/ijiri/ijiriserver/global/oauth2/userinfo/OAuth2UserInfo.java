@@ -6,7 +6,7 @@ public interface OAuth2UserInfo {
 
     String getProvider();
 
-    String getProviderId();
+    String getProviderUserId();
 
     String getEmail();
 
@@ -16,7 +16,6 @@ public interface OAuth2UserInfo {
         return switch (registrationId) {
             case "kakao" -> new KakaoUserInfo(attributes);
             case "google" -> new GoogleUserInfo(attributes);
-            case "apple" -> new AppleUserInfo(attributes);
             default -> throw new IllegalArgumentException("Unsupported provider: " + registrationId);
         };
     }

@@ -10,7 +10,7 @@ public record KakaoUserInfo(Map<String, Object> attributes) implements OAuth2Use
     }
 
     @Override
-    public String getProviderId() {
+    public String getProviderUserId() {
         return String.valueOf(attributes.get("id"));
     }
 

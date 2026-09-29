@@ -34,8 +34,8 @@ public class OAuth2SuccessHandler extends SimpleUrlAuthenticationSuccessHandler 
         OAuth2UserInfo userInfo = OAuth2UserInfo.of(
                 token.getAuthorizedClientRegistrationId(), token.getPrincipal().getAttributes());
 
-        // TODO: User 엔티티 생기면 provider + providerId 로 조회/가입 후 userId 를 subject 로 사용
-        String subject = userInfo.getProvider() + ":" + userInfo.getProviderId();
+        // TODO: User 엔티티 생기면 provider + providerUserId 로 조회/가입 후 userId 를 subject 로 사용
+        String subject = userInfo.getProvider() + ":" + userInfo.getProviderUserId();
         String accessToken = jwtProvider.createAccessToken(subject, "ROLE_USER");
         String refreshToken = jwtProvider.createRefreshToken(subject);
         // TODO: refreshToken DB 저장 (재발급 시 대조, 로그아웃 시 삭제)

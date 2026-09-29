@@ -144,7 +144,8 @@ Package rules:
 - Entities: **every persisted field except the primary key (`@Id`) MUST have `@Column`** with
   `name` always set, plus only the constraints that differ from JPA defaults
   (`nullable = false`, `length` when not 255, `unique = true`, `updatable = false`).
-  Do not write default values such as `nullable = true` or `length = 255`.
+  Never write JPA default values: `nullable = true`, `length = 255`, `unique = false`,
+  `updatable = true`, `insertable = true`.
   ```java
   @Column(name = "email", nullable = false)
   @Column(name = "profile_image_url", length = 500)

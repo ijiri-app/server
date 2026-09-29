@@ -59,7 +59,7 @@ public class TokenServiceImpl implements TokenService {
     }
 
     @Override
-    public void logout(Long memberId, String refreshToken) {
+    public void signOut(Long memberId, String refreshToken) {
         refreshTokenRepository.deleteByTokenHashAndMemberId(RefreshToken.hash(refreshToken), memberId);
     }
 

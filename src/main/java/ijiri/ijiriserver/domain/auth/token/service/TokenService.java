@@ -11,5 +11,5 @@ public interface TokenService {
 
     TokenResponse refresh(String refreshToken);
 
-    void logout(Long memberId, String refreshToken);
+    void signOut(Long memberId, String refreshToken);
 }

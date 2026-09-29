@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "Auth", description = "소셜 로그인 / 토큰")
+@Tag(name = "Auth", description = "회원가입 / 로그인 / 토큰")
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
@@ -39,12 +39,12 @@ public class TokenController {
             summary = "로그아웃",
             description = "해당 기기의 refresh token 폐기"
     )
-    @PostMapping("/logout")
-    public BaseResponse<Void> logout(
+    @PostMapping("/signout")
+    public BaseResponse<Void> signOut(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody RefreshTokenRequest request
     ) {
-        tokenService.logout(Long.valueOf(memberId), request.refreshToken());
-        return BaseResponse.of(AuthStatusCode.LOGOUT_SUCCESS, null);
+        tokenService.signOut(Long.valueOf(memberId), request.refreshToken());
+        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, null);
     }
 }

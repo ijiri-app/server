@@ -3,8 +3,10 @@ package ijiri.ijiriserver.domain.member.service.impl;
 import ijiri.ijiriserver.domain.auth.common.service.SocialUnlinkService;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
+import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.domain.member.entity.Role;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
 @Service
@@ -47,6 +50,34 @@ public class MemberServiceImpl implements MemberService {
         return memberRepository.findByProviderAndProviderMemberId(command.provider(), command.providerMemberId())
                 .map(member -> new MemberRegisterResult(member, false))
                 .orElseGet(() -> new MemberRegisterResult(memberRepository.save(toMember(command)), true));
+    }
+
+    // 이메일 회원은 provider = EMAIL, providerMemberId = email 로 저장해 (provider, providerMemberId) 유니크로 중복을 막는다
+    @Override
+    @Transactional
+    public Member signup(MemberSignupCommand command) {
+        if (existsEmailMember(command.email())) {
+            throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
+        }
+        return memberRepository.save(Member.builder()
+                .provider(Provider.EMAIL)
+                .providerMemberId(command.email())
+                .email(command.email())
+                .nickname(command.nickname())
+                .password(command.encodedPassword())
+                .role(Role.USER)
+                .build()
+        );
+    }
+
+    @Override
+    public Optional<Member> findEmailMember(String email) {
+        return memberRepository.findByProviderAndProviderMemberId(Provider.EMAIL, email);
+    }
+
+    @Override
+    public boolean existsEmailMember(String email) {
+        return memberRepository.existsByProviderAndProviderMemberId(Provider.EMAIL, email);
     }
 
     @Override

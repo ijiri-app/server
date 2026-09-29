@@ -1,10 +1,10 @@
-package ijiri.ijiriserver.domain.auth.oauth.dto.response;
+package ijiri.ijiriserver.domain.auth.common.dto.response;
 
-public record OAuthLoginResponse(
+public record SignInResponse(
         String accessToken,
         String refreshToken,
         long accessTokenExpiresIn,
         boolean isNewMember,
-        OAuthMemberResponse member
+        SignInMemberResponse member
 ) {
 }

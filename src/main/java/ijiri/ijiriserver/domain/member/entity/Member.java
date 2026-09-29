@@ -37,6 +37,10 @@ public class Member extends BaseTimeEntity {
     @Column(name = "nickname", nullable = false, length = 100)
     private String nickname;
 
+    // 이메일 회원만 사용하는 BCrypt 해시. 소셜 회원은 null
+    @Column(name = "password", length = 60)
+    private String password;
+
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
 

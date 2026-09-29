@@ -3,9 +3,9 @@ package ijiri.ijiriserver.domain.auth.oauth.service.impl;
 import ijiri.ijiriserver.domain.auth.common.client.SocialTokenVerifier;
 import ijiri.ijiriserver.domain.auth.common.dto.SocialMemberInfo;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthLoginRequest;
-import ijiri.ijiriserver.domain.auth.oauth.dto.response.OAuthLoginResponse;
-import ijiri.ijiriserver.domain.auth.oauth.dto.response.OAuthMemberResponse;
+import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthSignInRequest;
+import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.SignInMemberResponse;
 import ijiri.ijiriserver.domain.auth.oauth.service.OAuthService;
 import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
@@ -43,7 +43,7 @@ public class OAuthServiceImpl implements OAuthService {
 
     // 소셜 서버 호출(verify)이 DB 트랜잭션을 붙잡지 않도록 트랜잭션은 가입/토큰 저장 단위로만 건다
     @Override
-    public OAuthLoginResponse login(OAuthLoginRequest request) {
+    public SignInResponse signIn(OAuthSignInRequest request) {
         SocialMemberInfo info = resolveVerifier(request.provider()).verify(request.token());
 
         MemberRegisterResult result = memberService.registerIfAbsent(new MemberRegisterCommand(
@@ -56,12 +56,12 @@ public class OAuthServiceImpl implements OAuthService {
         Member member = result.member();
 
         TokenResponse tokens = tokenService.issue(member);
-        return new OAuthLoginResponse(
+        return new SignInResponse(
                 tokens.accessToken(),
                 tokens.refreshToken(),
                 tokenService.getAccessTokenExpiresIn(),
                 result.isNewMember(),
-                OAuthMemberResponse.from(member)
+                SignInMemberResponse.from(member)
         );
     }
 

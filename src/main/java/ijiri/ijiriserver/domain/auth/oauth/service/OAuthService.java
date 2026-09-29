@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.domain.auth.oauth.service;
 
-import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthLoginRequest;
-import ijiri.ijiriserver.domain.auth.oauth.dto.response.OAuthLoginResponse;
+import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthSignInRequest;
+import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
 
 public interface OAuthService {
 
-    OAuthLoginResponse login(OAuthLoginRequest request);
+    SignInResponse signIn(OAuthSignInRequest request);
 }

@@ -1,7 +1,8 @@
 # IjiriServer
 
 Spring Boot 3.5 / Java 21 / Gradle / PostgreSQL / Spring Data JPA / Spring Security (stateless JWT).
-Mobile apps log in with Kakao/Google SDK tokens; the server verifies them and issues its own JWTs.
+Members sign up with email + password (SMTP email verification) or sign in with Kakao/Google
+SDK tokens, which the server verifies before issuing its own JWTs.
 
 ## Workflow (mandatory)
 
@@ -36,14 +37,18 @@ ijiri.ijiriserver
 │   ├── auth
 │   │   ├── common                shared by all providers
 │   │   │   ├── client            SocialTokenVerifier, SocialUnlinkClient (strategy interfaces)
-│   │   │   ├── dto               internal DTOs (e.g. SocialUserInfo)
+│   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (SignInResponse)
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── oauth                 POST /auth/login (provider + token), OAuthController
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code,
+│   │   │   │                     /auth/email/verify (AuthController, EmailVerificationController)
+│   │   │   ├── client  controller  dto/request  entity  repository
+│   │   │   ├── scheduler  service  service/impl
+│   │   ├── oauth                 POST /auth/signin/oauth (provider + token), OAuthController
 │   │   │   ├── controller  dto/request  dto/response  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
-│   │   └── token                 POST /auth/refresh, /auth/logout
+│   │   └── token                 POST /auth/refresh, /auth/signout
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
@@ -182,7 +187,11 @@ Package rules:
 - JWT subject = member id. Access token 1h, refresh token 28d (`application.yaml`).
 - Refresh tokens are stored as SHA-256 hashes only, rotated on reissue,
   and expired rows are purged daily by `RefreshTokenCleanupScheduler`.
-- Member identity = `provider + provider_user_id` (unique constraint).
+- Member identity = `provider + provider_member_id` (unique constraint). Email members use
+  `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
+- Sign-up requires a verified email: 6-char alphanumeric code, valid 10 min, 5 attempts,
+  60 s resend cooldown; a verified email must sign up within 30 min.
+- Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
 - Secrets come from `.env` (never commit it). Never log tokens or secrets.
 
 ## Commit convention

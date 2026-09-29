@@ -24,7 +24,9 @@ public class MemberController {
     private final MemberQueryService memberQueryService;
     private final MemberWithdrawService memberWithdrawService;
 
-    @Operation(summary = "내 정보 조회")
+    @Operation(
+            summary = "내 정보 조회"
+    )
     @GetMapping("/me")
     public BaseResponse<MemberResponse> getMe(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
@@ -32,7 +34,10 @@ public class MemberController {
         return BaseResponse.ok(memberQueryService.getMember(Long.valueOf(memberId)));
     }
 
-    @Operation(summary = "회원 탈퇴", description = "카카오 회원은 카카오 연결 끊기까지 함께 처리")
+    @Operation(
+            summary = "회원 탈퇴",
+            description = "카카오 회원은 카카오 연결 끊기까지 함께 처리"
+    )
     @DeleteMapping("/me")
     public BaseResponse<Void> withdraw(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId

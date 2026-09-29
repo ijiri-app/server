@@ -37,7 +37,10 @@ public class TokenController {
         return BaseResponse.of(AuthStatusCode.REFRESH_SUCCESS, tokenRefreshService.refresh(request.refreshToken()));
     }
 
-    @Operation(summary = "로그아웃", description = "해당 기기의 refresh token 폐기")
+    @Operation(
+            summary = "로그아웃",
+            description = "해당 기기의 refresh token 폐기"
+    )
     @PostMapping("/logout")
     public BaseResponse<Void> logout(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,

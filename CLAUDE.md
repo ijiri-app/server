@@ -40,7 +40,7 @@ ijiri.ijiriserver
 │   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (AuthResponse)
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout, /auth/email/verification-code
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
@@ -48,7 +48,7 @@ ijiri.ijiriserver
 │   │   │   ├── controller  dto/request  dto/response  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
-│   │   └── token                 POST /auth/refresh, /auth/signout
+│   │   └── token                 POST /auth/refresh
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
@@ -180,6 +180,11 @@ Package rules:
 
 ## Security notes
 - JWT subject = member id. Access token 1h, refresh token 28d (`application.yaml`).
+- Tokens are returned in the body AND as `accessToken` / `refreshToken` cookies
+  (HttpOnly, Secure, SameSite=None) via `JwtCookieManager`. Access token is read from the
+  `Authorization` header first, then the cookie. Refresh reads the body, then the cookie.
+- Sign-out: resolve access token (header -> cookie), 401 if missing/invalid, load the member,
+  expire both cookies, delete all of the member's refresh tokens.
 - Refresh tokens are stored as SHA-256 hashes only, rotated on reissue,
   and expired rows are purged daily by `RefreshTokenCleanupScheduler`.
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use

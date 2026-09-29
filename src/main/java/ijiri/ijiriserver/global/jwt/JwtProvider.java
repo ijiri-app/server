@@ -20,6 +20,8 @@ import java.util.UUID;
 public class JwtProvider {
 
     private static final String ROLE_CLAIM = "role";
+    // Spring Security 의 hasRole() 은 "ROLE_" 접두사가 붙은 authority 를 기대한다
+    private static final String ROLE_PREFIX = "ROLE_";
     private static final String TYPE_CLAIM = "type";
     private static final String ACCESS_TYPE = "access";
     private static final String REFRESH_TYPE = "refresh";
@@ -88,7 +90,7 @@ public class JwtProvider {
         Claims claims = parse(token);
         String role = claims.get(ROLE_CLAIM, String.class);
         return new UsernamePasswordAuthenticationToken(
-                claims.getSubject(), null, List.of(new SimpleGrantedAuthority(role)));
+                claims.getSubject(), null, List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role)));
     }
 
     private Claims parse(String token) {

@@ -32,7 +32,7 @@ public class RefreshTokenServiceImpl
     @Override
     public TokenResponse issue(Member member) {
         String subject = String.valueOf(member.getId());
-        String accessToken = jwtProvider.createAccessToken(subject, member.getRole().getKey());
+        String accessToken = jwtProvider.createAccessToken(subject, member.getRole().name());
         String refreshToken = jwtProvider.createRefreshToken(subject);
 
         LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getRefreshTokenValiditySeconds());

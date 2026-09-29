@@ -106,6 +106,10 @@ Package rules:
   long parameter lists one per line, aligned with 8-space continuation indent.
 - 4-space indentation, no tabs. No wildcard imports. Remove unused imports.
 - Constructor injection only via Lombok `@RequiredArgsConstructor` with `private final` fields.
+- Entities: **every persisted field MUST have `@Column` with its constraints stated explicitly**
+  (`name` when it differs from the default, `nullable`, `length` for strings, `unique`,
+  `updatable` where relevant), including nullable fields. The primary key (`@Id`) is the
+  only exception: it gets no `@Column`.
 - Entities: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`,
   `@Builder` on a private constructor, extend `BaseTimeEntity` when timestamps are needed,
   enums stored with `@Enumerated(EnumType.STRING)`.

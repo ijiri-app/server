@@ -4,13 +4,13 @@ import ijiri.ijiriserver.domain.auth.common.client.SocialTokenVerifier;
 import ijiri.ijiriserver.domain.auth.common.dto.SocialMemberInfo;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthSignInRequest;
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInMemberResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.oauth.service.OAuthService;
-import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
+import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.domain.member.service.MemberService;
@@ -43,7 +43,7 @@ public class OAuthServiceImpl implements OAuthService {
 
     // 소셜 서버 호출(verify)이 DB 트랜잭션을 붙잡지 않도록 트랜잭션은 가입/토큰 저장 단위로만 건다
     @Override
-    public SignInResponse signIn(OAuthSignInRequest request) {
+    public AuthResponse signIn(OAuthSignInRequest request) {
         SocialMemberInfo info = resolveVerifier(request.provider()).verify(request.token());
 
         MemberRegisterResult result = memberService.registerIfAbsent(new MemberRegisterCommand(
@@ -54,15 +54,7 @@ public class OAuthServiceImpl implements OAuthService {
                 info.profileImageUrl()
         ));
         Member member = result.member();
-
-        TokenResponse tokens = tokenService.issue(member);
-        return new SignInResponse(
-                tokens.accessToken(),
-                tokens.refreshToken(),
-                tokenService.getAccessTokenExpiresIn(),
-                result.isNewMember(),
-                SignInMemberResponse.from(member)
-        );
+        return tokenService.issue(member).withSignIn(result.isNewMember(), MemberResponse.from(member));
     }
 
     // enum 에 없는 값이거나 검증 구현체가 없는 provider 는 모두 UNSUPPORTED_PROVIDER

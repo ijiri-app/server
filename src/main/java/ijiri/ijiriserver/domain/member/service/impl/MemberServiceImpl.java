@@ -82,12 +82,13 @@ public class MemberServiceImpl implements MemberService {
 
     @Override
     @Transactional
-    public void withdraw(Long memberId) {
+    public MemberResponse withdraw(Long memberId) {
         Member member = getById(memberId);
         eventPublisher.publishEvent(new MemberWithdrawnEvent(memberId));
         memberRepository.delete(member);
         // 외부 호출은 마지막에: 실패하면 예외로 위 삭제가 전부 롤백되어 다시 탈퇴를 시도할 수 있다
         socialUnlinkService.unlink(member.getProvider(), member.getProviderMemberId());
+        return MemberResponse.from(member);
     }
 
     private Member toMember(MemberRegisterCommand command) {

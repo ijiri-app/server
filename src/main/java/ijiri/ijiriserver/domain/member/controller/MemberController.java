@@ -37,10 +37,9 @@ public class MemberController {
             description = "카카오 회원은 카카오 연결 끊기까지 함께 처리"
     )
     @DeleteMapping("/me")
-    public BaseResponse<Void> withdraw(
+    public BaseResponse<MemberResponse> withdraw(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        memberService.withdraw(Long.valueOf(memberId));
-        return BaseResponse.of(MemberStatusCode.WITHDRAW_SUCCESS, null);
+        return BaseResponse.of(MemberStatusCode.WITHDRAW_SUCCESS, memberService.withdraw(Long.valueOf(memberId)));
     }
 }

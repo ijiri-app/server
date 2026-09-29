@@ -1,15 +1,16 @@
 package ijiri.ijiriserver.domain.auth.email.service.impl;
 
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInMemberResponse;
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
-import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
+import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
@@ -32,7 +33,7 @@ public class AuthServiceImpl implements AuthService {
     // 틀린 인증 시도 횟수가 가입 실패와 함께 롤백되지 않도록 전체를 하나의 트랜잭션으로 묶지 않는다.
     // 코드를 쓰기 전에 중복 이메일을 먼저 확인해, 가입이 불가능한 요청으로 코드가 소모되지 않게 한다
     @Override
-    public SignInResponse signup(SignupRequest request) {
+    public AuthResponse signup(SignupRequest request) {
         if (memberService.existsEmailMember(request.email())) {
             throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
         }
@@ -42,27 +43,16 @@ public class AuthServiceImpl implements AuthService {
                 request.nickname(),
                 passwordEncoder.encode(request.password())
         ));
-        return toSignInResponse(member, true);
+        return AuthResponse.signup(MemberResponse.from(member));
     }
 
     @Override
     @Transactional
-    public SignInResponse signIn(SignInRequest request) {
+    public AuthResponse signIn(SignInRequest request) {
         // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답한다
         Member member = memberService.findEmailMember(request.email())
                 .filter(found -> passwordEncoder.matches(request.password(), found.getPassword()))
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_CREDENTIALS));
-        return toSignInResponse(member, false);
-    }
-
-    private SignInResponse toSignInResponse(Member member, boolean isNewMember) {
-        TokenResponse tokens = tokenService.issue(member);
-        return new SignInResponse(
-                tokens.accessToken(),
-                tokens.refreshToken(),
-                tokenService.getAccessTokenExpiresIn(),
-                isNewMember,
-                SignInMemberResponse.from(member)
-        );
+        return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
     }
 }

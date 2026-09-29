@@ -1,12 +1,13 @@
 package ijiri.ijiriserver.domain.auth.email.service;
 
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 
 public interface AuthService {
 
-    SignInResponse signup(SignupRequest request);
+    AuthResponse signup(SignupRequest request);
 
-    SignInResponse signIn(SignInRequest request);
+    AuthResponse signIn(SignInRequest request);
 }

@@ -22,5 +22,5 @@ public interface MemberService {
 
     boolean existsEmailMember(String email);
 
-    void withdraw(Long memberId);
+    MemberResponse withdraw(Long memberId);
 }

@@ -1,9 +1,10 @@
 package ijiri.ijiriserver.domain.auth.email.controller;
 
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -28,12 +29,12 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 회원가입",
-            description = "닉네임, 이메일, 비밀번호로 가입하고 바로 로그인 토큰을 발급"
+            description = "닉네임, 이메일, 비밀번호, 인증 코드로 가입. 토큰은 발급하지 않는다"
     )
     @SecurityRequirements
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/signup")
-    public BaseResponse<SignInResponse> signup(@Valid @RequestBody SignupRequest request) {
+    public BaseResponse<AuthResponse> signup(@Valid @RequestBody SignupRequest request) {
         return BaseResponse.of(AuthStatusCode.SIGNUP_SUCCESS, authService.signup(request));
     }
 
@@ -43,7 +44,7 @@ public class AuthController {
     )
     @SecurityRequirements
     @PostMapping("/signin")
-    public BaseResponse<SignInResponse> signIn(@Valid @RequestBody SignInRequest request) {
+    public BaseResponse<AuthResponse> signIn(@Valid @RequestBody SignInRequest request) {
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, authService.signIn(request));
     }
 }

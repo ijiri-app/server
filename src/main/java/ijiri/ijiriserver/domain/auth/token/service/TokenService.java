@@ -1,15 +1,13 @@
 package ijiri.ijiriserver.domain.auth.token.service;
 
-import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
 
 public interface TokenService {
 
-    TokenResponse issue(Member member);
+    AuthResponse issue(Member member);
 
-    long getAccessTokenExpiresIn();
+    AuthResponse refresh(String refreshToken);
 
-    TokenResponse refresh(String refreshToken);
-
-    void signOut(Long memberId, String refreshToken);
+    AuthResponse signOut(Long memberId, String refreshToken);
 }

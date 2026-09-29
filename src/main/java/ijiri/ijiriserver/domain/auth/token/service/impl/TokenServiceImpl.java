@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.auth.token.service.impl;
 
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
@@ -27,23 +27,18 @@ public class TokenServiceImpl implements TokenService {
     private final JwtProvider jwtProvider;
 
     @Override
-    public TokenResponse issue(Member member) {
+    public AuthResponse issue(Member member) {
         String subject = String.valueOf(member.getId());
         String accessToken = jwtProvider.createAccessToken(subject, member.getRole().name());
         String refreshToken = jwtProvider.createRefreshToken(subject);
 
         LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getRefreshTokenValiditySeconds());
         refreshTokenRepository.save(RefreshToken.of(member.getId(), refreshToken, expiresAt));
-        return new TokenResponse(accessToken, refreshToken);
+        return AuthResponse.tokens(accessToken, refreshToken, jwtProvider.getAccessTokenValiditySeconds());
     }
 
     @Override
-    public long getAccessTokenExpiresIn() {
-        return jwtProvider.getAccessTokenValiditySeconds();
-    }
-
-    @Override
-    public TokenResponse refresh(String refreshToken) {
+    public AuthResponse refresh(String refreshToken) {
         if (!jwtProvider.validateRefreshToken(refreshToken)) {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
@@ -59,8 +54,9 @@ public class TokenServiceImpl implements TokenService {
     }
 
     @Override
-    public void signOut(Long memberId, String refreshToken) {
+    public AuthResponse signOut(Long memberId, String refreshToken) {
         refreshTokenRepository.deleteByTokenHashAndMemberId(RefreshToken.hash(refreshToken), memberId);
+        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
     }
 
     @EventListener

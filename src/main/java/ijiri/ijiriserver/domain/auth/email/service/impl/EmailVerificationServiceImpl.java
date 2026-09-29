@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.service.impl;
 
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.client.VerificationMailSender;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
 import ijiri.ijiriserver.domain.auth.email.repository.EmailVerificationRepository;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.security.SecureRandom;
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
@@ -34,7 +36,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     // 메일 발송이 실패하면 예외로 코드 저장도 롤백되어, 받지 못한 코드가 남지 않는다
     @Override
     @Transactional
-    public void sendCode(String email) {
+    public AuthResponse sendCode(String email) {
         if (memberService.existsEmailMember(email)) {
             throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
         }
@@ -55,6 +57,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
                 );
 
         verificationMailSender.send(email, code, CODE_VALID_MINUTES);
+        return AuthResponse.verificationCodeSent(Duration.ofMinutes(CODE_VALID_MINUTES).toSeconds());
     }
 
     // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다

@@ -2,7 +2,7 @@ package ijiri.ijiriserver.domain.auth.token.controller;
 
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
-import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,7 +31,7 @@ public class TokenController {
     )
     @SecurityRequirements
     @PostMapping("/refresh")
-    public BaseResponse<TokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+    public BaseResponse<AuthResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         return BaseResponse.of(AuthStatusCode.REFRESH_SUCCESS, tokenService.refresh(request.refreshToken()));
     }
 
@@ -40,11 +40,13 @@ public class TokenController {
             description = "해당 기기의 refresh token 폐기"
     )
     @PostMapping("/signout")
-    public BaseResponse<Void> signOut(
+    public BaseResponse<AuthResponse> signOut(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody RefreshTokenRequest request
     ) {
-        tokenService.signOut(Long.valueOf(memberId), request.refreshToken());
-        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, null);
+        return BaseResponse.of(
+                AuthStatusCode.SIGNOUT_SUCCESS,
+                tokenService.signOut(Long.valueOf(memberId), request.refreshToken())
+        );
     }
 }

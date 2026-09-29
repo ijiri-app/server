@@ -2,7 +2,7 @@ package ijiri.ijiriserver.domain.auth.oauth.controller;
 
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.oauth.dto.request.OAuthSignInRequest;
-import ijiri.ijiriserver.domain.auth.common.dto.response.SignInResponse;
+import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.oauth.service.OAuthService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,7 +29,7 @@ public class OAuthController {
     )
     @SecurityRequirements
     @PostMapping("/signin/oauth")
-    public BaseResponse<SignInResponse> signIn(@Valid @RequestBody OAuthSignInRequest request) {
+    public BaseResponse<AuthResponse> signIn(@Valid @RequestBody OAuthSignInRequest request) {
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, oAuthService.signIn(request));
     }
 }

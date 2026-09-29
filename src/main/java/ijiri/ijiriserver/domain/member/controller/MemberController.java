@@ -2,8 +2,7 @@ package ijiri.ijiriserver.domain.member.controller;
 
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
-import ijiri.ijiriserver.domain.member.service.MemberQueryService;
-import ijiri.ijiriserver.domain.member.service.MemberWithdrawService;
+import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -21,8 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MemberController {
 
-    private final MemberQueryService memberQueryService;
-    private final MemberWithdrawService memberWithdrawService;
+    private final MemberService memberService;
 
     @Operation(
             summary = "내 정보 조회"
@@ -31,7 +29,7 @@ public class MemberController {
     public BaseResponse<MemberResponse> getMe(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(memberQueryService.getMember(Long.valueOf(memberId)));
+        return BaseResponse.ok(memberService.getMember(Long.valueOf(memberId)));
     }
 
     @Operation(
@@ -42,7 +40,7 @@ public class MemberController {
     public BaseResponse<Void> withdraw(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        memberWithdrawService.withdraw(Long.valueOf(memberId));
+        memberService.withdraw(Long.valueOf(memberId));
         return BaseResponse.of(MemberStatusCode.WITHDRAW_SUCCESS, null);
     }
 }

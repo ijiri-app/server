@@ -3,8 +3,7 @@ package ijiri.ijiriserver.domain.auth.token.controller;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
 import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
-import ijiri.ijiriserver.domain.auth.token.service.LogoutService;
-import ijiri.ijiriserver.domain.auth.token.service.TokenRefreshService;
+import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,8 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TokenController {
 
-    private final TokenRefreshService tokenRefreshService;
-    private final LogoutService logoutService;
+    private final TokenService tokenService;
 
     @Operation(
             summary = "토큰 갱신",
@@ -34,7 +32,7 @@ public class TokenController {
     @SecurityRequirements
     @PostMapping("/refresh")
     public BaseResponse<TokenResponse> refresh(@Valid @RequestBody RefreshTokenRequest request) {
-        return BaseResponse.of(AuthStatusCode.REFRESH_SUCCESS, tokenRefreshService.refresh(request.refreshToken()));
+        return BaseResponse.of(AuthStatusCode.REFRESH_SUCCESS, tokenService.refresh(request.refreshToken()));
     }
 
     @Operation(
@@ -46,7 +44,7 @@ public class TokenController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody RefreshTokenRequest request
     ) {
-        logoutService.logout(Long.valueOf(memberId), request.refreshToken());
+        tokenService.logout(Long.valueOf(memberId), request.refreshToken());
         return BaseResponse.of(AuthStatusCode.LOGOUT_SUCCESS, null);
     }
 }

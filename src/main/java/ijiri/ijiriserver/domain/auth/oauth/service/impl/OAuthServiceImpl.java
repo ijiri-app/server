@@ -8,12 +8,12 @@ import ijiri.ijiriserver.domain.auth.oauth.dto.response.OAuthLoginResponse;
 import ijiri.ijiriserver.domain.auth.oauth.dto.response.OAuthMemberResponse;
 import ijiri.ijiriserver.domain.auth.oauth.service.OAuthService;
 import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
-import ijiri.ijiriserver.domain.auth.token.service.TokenIssueService;
+import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
-import ijiri.ijiriserver.domain.member.service.MemberRegisterService;
+import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import org.springframework.stereotype.Service;
 
@@ -27,18 +27,18 @@ import java.util.stream.Collectors;
 public class OAuthServiceImpl implements OAuthService {
 
     private final Map<Provider, SocialTokenVerifier> verifiers;
-    private final MemberRegisterService memberRegisterService;
-    private final TokenIssueService tokenIssueService;
+    private final MemberService memberService;
+    private final TokenService tokenService;
 
     public OAuthServiceImpl(
             List<SocialTokenVerifier> verifiers,
-            MemberRegisterService memberRegisterService,
-            TokenIssueService tokenIssueService
+            MemberService memberService,
+            TokenService tokenService
     ) {
         this.verifiers = verifiers.stream()
                 .collect(Collectors.toMap(SocialTokenVerifier::provider, Function.identity()));
-        this.memberRegisterService = memberRegisterService;
-        this.tokenIssueService = tokenIssueService;
+        this.memberService = memberService;
+        this.tokenService = tokenService;
     }
 
     // 소셜 서버 호출(verify)이 DB 트랜잭션을 붙잡지 않도록 트랜잭션은 가입/토큰 저장 단위로만 건다
@@ -46,7 +46,7 @@ public class OAuthServiceImpl implements OAuthService {
     public OAuthLoginResponse login(OAuthLoginRequest request) {
         SocialMemberInfo info = resolveVerifier(request.provider()).verify(request.token());
 
-        MemberRegisterResult result = memberRegisterService.registerIfAbsent(new MemberRegisterCommand(
+        MemberRegisterResult result = memberService.registerIfAbsent(new MemberRegisterCommand(
                 info.provider(),
                 info.providerMemberId(),
                 info.email(),
@@ -55,11 +55,11 @@ public class OAuthServiceImpl implements OAuthService {
         ));
         Member member = result.member();
 
-        TokenResponse tokens = tokenIssueService.issue(member);
+        TokenResponse tokens = tokenService.issue(member);
         return new OAuthLoginResponse(
                 tokens.accessToken(),
                 tokens.refreshToken(),
-                tokenIssueService.getAccessTokenExpiresIn(),
+                tokenService.getAccessTokenExpiresIn(),
                 result.isNewMember(),
                 OAuthMemberResponse.from(member)
         );

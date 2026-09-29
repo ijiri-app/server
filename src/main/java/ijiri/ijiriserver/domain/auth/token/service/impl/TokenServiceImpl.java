@@ -4,15 +4,14 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.dto.response.TokenResponse;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
-import ijiri.ijiriserver.domain.auth.token.service.LogoutService;
-import ijiri.ijiriserver.domain.auth.token.service.TokenIssueService;
-import ijiri.ijiriserver.domain.auth.token.service.TokenRefreshService;
-import ijiri.ijiriserver.domain.auth.token.service.TokenRevokeService;
+import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.entity.Member;
-import ijiri.ijiriserver.domain.member.service.MemberFindService;
+import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
+import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,11 +20,10 @@ import java.time.LocalDateTime;
 @Service
 @RequiredArgsConstructor
 @Transactional
-public class RefreshTokenServiceImpl
-        implements TokenIssueService, TokenRefreshService, LogoutService, TokenRevokeService {
+public class TokenServiceImpl implements TokenService {
 
     private final RefreshTokenRepository refreshTokenRepository;
-    private final MemberFindService memberFindService;
+    private final MemberService memberService;
     private final JwtProvider jwtProvider;
 
     @Override
@@ -35,7 +33,7 @@ public class RefreshTokenServiceImpl
         String refreshToken = jwtProvider.createRefreshToken(subject);
 
         LocalDateTime expiresAt = LocalDateTime.now().plusSeconds(jwtProvider.getRefreshTokenValiditySeconds());
-        refreshTokenRepository.save(new RefreshToken(member.getId(), refreshToken, expiresAt));
+        refreshTokenRepository.save(RefreshToken.of(member.getId(), refreshToken, expiresAt));
         return new TokenResponse(accessToken, refreshToken);
     }
 
@@ -57,7 +55,7 @@ public class RefreshTokenServiceImpl
         }
         refreshTokenRepository.delete(saved);
 
-        return issue(memberFindService.getById(saved.getMemberId()));
+        return issue(memberService.getById(saved.getMemberId()));
     }
 
     @Override
@@ -65,8 +63,8 @@ public class RefreshTokenServiceImpl
         refreshTokenRepository.deleteByTokenHashAndMemberId(RefreshToken.hash(refreshToken), memberId);
     }
 
-    @Override
-    public void revokeAll(Long memberId) {
-        refreshTokenRepository.deleteAllByMemberId(memberId);
+    @EventListener
+    public void revokeAll(MemberWithdrawnEvent event) {
+        refreshTokenRepository.deleteAllByMemberId(event.memberId());
     }
 }

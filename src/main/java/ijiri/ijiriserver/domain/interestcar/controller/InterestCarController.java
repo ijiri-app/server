@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.interestcar.controller;
 import ijiri.ijiriserver.domain.interestcar.dto.request.InterestCarUpdateRequest;
 import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.exception.InterestCarStatusCode;
-import ijiri.ijiriserver.domain.interestcar.service.InterestCarUpdateService;
+import ijiri.ijiriserver.domain.interestcar.service.InterestCarService;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InterestCarController {
 
-    private final InterestCarUpdateService interestCarUpdateService;
+    private final InterestCarService interestCarService;
 
     @Operation(
             summary = "관심 차종 저장",
@@ -35,7 +35,7 @@ public class InterestCarController {
     ) {
         return BaseResponse.of(
                 InterestCarStatusCode.UPDATE_SUCCESS,
-                interestCarUpdateService.replaceAll(Long.valueOf(memberId), request.carModelIds())
+                interestCarService.replaceAll(Long.valueOf(memberId), request.carModelIds())
         );
     }
 }

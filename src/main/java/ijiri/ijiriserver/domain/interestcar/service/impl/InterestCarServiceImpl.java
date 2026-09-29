@@ -4,10 +4,11 @@ import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.entity.MemberInterestCar;
 import ijiri.ijiriserver.domain.interestcar.exception.InterestCarStatusCode;
 import ijiri.ijiriserver.domain.interestcar.repository.MemberInterestCarRepository;
-import ijiri.ijiriserver.domain.interestcar.service.InterestCarRemoveService;
-import ijiri.ijiriserver.domain.interestcar.service.InterestCarUpdateService;
+import ijiri.ijiriserver.domain.interestcar.service.InterestCarService;
+import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,7 +18,7 @@ import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
-public class InterestCarServiceImpl implements InterestCarUpdateService, InterestCarRemoveService {
+public class InterestCarServiceImpl implements InterestCarService {
 
     private final MemberInterestCarRepository memberInterestCarRepository;
 
@@ -41,9 +42,9 @@ public class InterestCarServiceImpl implements InterestCarUpdateService, Interes
         return InterestCarResponse.from(memberInterestCarRepository.saveAll(interestCars));
     }
 
-    @Override
+    @EventListener
     @Transactional
-    public void removeAll(Long memberId) {
-        memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
+    public void removeAll(MemberWithdrawnEvent event) {
+        memberInterestCarRepository.deleteAllByMemberIdInBulk(event.memberId());
     }
 }

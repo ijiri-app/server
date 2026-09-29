@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -24,6 +26,8 @@ import java.util.HexFormat;
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+@Builder
 @Table(name = "refresh_token", indexes = @Index(name = "idx_refresh_token_member_id", columnList = "member_id"))
 public class RefreshToken {
 
@@ -40,10 +44,13 @@ public class RefreshToken {
     @Column(name = "expires_at", nullable = false, updatable = false)
     private LocalDateTime expiresAt;
 
-    public RefreshToken(Long memberId, String token, LocalDateTime expiresAt) {
-        this.memberId = memberId;
-        this.tokenHash = hash(token);
-        this.expiresAt = expiresAt;
+    // 원문 토큰이 엔티티에 남지 않도록 생성 시점에 해시로 바꾼다
+    public static RefreshToken of(Long memberId, String token, LocalDateTime expiresAt) {
+        return RefreshToken.builder()
+                .memberId(memberId)
+                .tokenHash(hash(token))
+                .expiresAt(expiresAt)
+                .build();
     }
 
     public static String hash(String token) {

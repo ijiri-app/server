@@ -140,14 +140,13 @@ Package rules:
 ## Commit convention
 
 - **Commit messages MUST always be written in English** (even though reports are in Korean).
-- Format: `<type>(<scope>): <summary>` — Conventional Commits, imperative mood,
+- Format: `<type>: <summary>` — imperative mood, no scope (never `type(scope):`),
   no trailing period, max 72 chars.
 - Types: `feat`, `fix`, `refactor`, `chore` (build/config), `docs`, `test`, `style`.
-- Scope: domain or area — `auth`, `kakao`, `google`, `token`, `member`, `global`, `config`, `build`.
 - One commit = one logical change. Group files by that change, not by file type.
 - Commit plan format in the report:
   ```
-  1. refactor(token): move RefreshTokenServiceImpl to service/impl
+  1. refactor: move RefreshTokenServiceImpl to service/impl
      - src/main/java/.../auth/token/service/impl/RefreshTokenServiceImpl.java
   2. docs: add commit convention to CLAUDE.md
      - CLAUDE.md

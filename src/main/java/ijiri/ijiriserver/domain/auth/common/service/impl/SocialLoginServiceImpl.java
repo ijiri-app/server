@@ -30,7 +30,7 @@ public class SocialLoginServiceImpl implements SocialLoginService {
                 .provider(info.provider())
                 .providerUserId(info.providerUserId())
                 .email(info.email())
-                .nickname(info.nickname())
+                .username(info.nickname())
                 .role(Role.USER)
                 .build()));
 

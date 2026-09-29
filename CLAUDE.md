@@ -34,20 +34,23 @@ ijiri.ijiriserver
 ├── IjiriServerApplication        (@EnableJpaAuditing, @EnableScheduling live here)
 ├── domain
 │   ├── auth
-│   │   ├── common                shared login logic
+│   │   ├── common                shared by all providers
+│   │   │   ├── client            SocialTokenVerifier, SocialUnlinkClient (strategy interfaces)
 │   │   │   ├── dto               internal DTOs (e.g. SocialUserInfo)
-│   │   │   ├── dto/response
 │   │   │   ├── exception         AuthStatusCode
-│   │   │   └── service           SocialLoginService (+ impl)
-│   │   ├── kakao                 POST /auth/kakao
-│   │   │   ├── client  controller  dto/request  service  service/impl
-│   │   ├── google                POST /auth/google
-│   │   │   ├── client  controller  dto/request  service  service/impl
-│   │   └── token                 POST /auth/reissue, /auth/logout
+│   │   │   └── service           SocialUnlinkService (+ impl)
+│   │   ├── oauth                 POST /auth/login (provider + token), OAuthController
+│   │   │   ├── controller  dto/request  dto/response  service  service/impl
+│   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
+│   │   ├── google                client only: GoogleOAuthClient (verify)
+│   │   └── token                 POST /auth/refresh, /auth/logout
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
-│   └── member                    /members/me
-│       ├── controller  dto/response  entity  exception
+│   ├── member                    GET/DELETE /members/me
+│   │   ├── controller  dto  dto/response  entity  exception
+│   │   ├── repository  service  service/impl
+│   └── interestcar               PUT /members/me/interest-cars
+│       ├── controller  dto/request  dto/response  entity  exception
 │       ├── repository  service  service/impl
 └── global
     ├── config                    SecurityConfig, SwaggerConfig
@@ -81,11 +84,12 @@ Package rules:
 ### SOLID
 - **SRP**: one reason to change per class. External API calls go in `client`,
   orchestration in `service`, HTTP mapping in `controller`.
-- **OCP**: add a new social provider by adding a new sub-package (`client` + service)
-  that feeds `SocialLoginService`; do not modify existing providers.
+- **OCP**: add a new social provider (e.g. Apple) by adding a sub-package with a
+  `SocialTokenVerifier` (and `SocialUnlinkClient` if needed) implementation plus a `Provider`
+  enum value; `OAuthService` picks it up automatically. Do not modify existing providers.
 - **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
 - **ISP**: split service interfaces by client need (e.g. `TokenIssueService`,
-  `TokenReissueService`, `LogoutService`, `TokenRevokeService`). One impl may implement
+  `TokenRefreshService`, `LogoutService`, `TokenRevokeService`). One impl may implement
   several interfaces; callers depend only on the interface they use.
 - **DIP**: controllers and other services depend on interfaces, never on `*Impl`.
 
@@ -104,6 +108,20 @@ Package rules:
 ### Java style
 - Max line length **120**. Break long lines: method chains one call per line,
   long parameter lists one per line, aligned with 8-space continuation indent.
+- When an argument list or annotation is broken across lines, the closing `)` goes on its
+  own line, aligned with the line that opened it. Calls/annotations that fit on one line
+  stay on one line.
+  ```java
+  return new OAuthLoginResponse(
+          tokens.accessToken(),
+          tokens.refreshToken()
+  );
+
+  @Operation(
+          summary = "...",
+          description = "..."
+  )
+  ```
 - 4-space indentation, no tabs. No wildcard imports. Remove unused imports.
 - Constructor injection only via Lombok `@RequiredArgsConstructor` with `private final` fields.
 - Entities: **every persisted field MUST have `@Column` with its constraints stated explicitly**

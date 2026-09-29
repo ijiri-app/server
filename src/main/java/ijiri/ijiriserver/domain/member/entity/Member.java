@@ -36,7 +36,7 @@ public class Member extends BaseTimeEntity {
     @Column(name = "provider", nullable = false, length = 20, updatable = false)
     private Provider provider;
 
-    @Column(name = "provider_user_id", nullable = false, length = 255, updatable = false)
+    @Column(name = "provider_member_id", nullable = false, length = 255, updatable = false)
     private String providerUserId;
 
     @Enumerated(EnumType.STRING)

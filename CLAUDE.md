@@ -47,7 +47,7 @@ ijiri.ijiriserver
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
-│   │   ├── controller  dto  dto/response  entity  exception
+│   │   ├── controller  dto  dto/response  entity  event  exception
 │   │   ├── repository  service  service/impl
 │   └── interestcar               PUT /members/me/interest-cars
 │       ├── controller  dto/request  dto/response  entity  exception
@@ -63,7 +63,7 @@ ijiri.ijiriserver
 
 Package rules:
 - A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
-  `dto/request`, `dto/response`, `exception`, and optionally `client`, `scheduler`.
+  `dto/request`, `dto/response`, `exception`, and optionally `client`, `scheduler`, `event`.
 - Sub-features of a domain get their own sub-package (e.g. `auth/kakao`, `auth/token`).
 - DTOs are always split into `dto/request` and `dto/response`.
   Internal transfer objects that are neither go directly in `dto`.
@@ -74,8 +74,11 @@ Package rules:
 
 ### DDD
 - Each domain is a bounded context. Other domains are accessed through their **service
-  interfaces**, not their repositories (e.g. `member` revokes tokens via `TokenRevokeService`,
-  never `RefreshTokenRepository`).
+  interface**, never their repositories (e.g. `auth/token` loads a member via `MemberService`,
+  never `MemberRepository`).
+- When calling another domain's service would create a circular dependency, publish a domain
+  event instead (e.g. `MemberWithdrawnEvent`; `auth/token` and `interestcar` listen with
+  `@EventListener` and delete their own rows inside the same transaction).
 - Put behavior that belongs to an entity on the entity (e.g. `RefreshToken.isExpired()`).
   Services orchestrate; entities hold their own invariants.
 - Entities: no public setters. Change state through intention-revealing methods.
@@ -88,16 +91,30 @@ Package rules:
   `SocialTokenVerifier` (and `SocialUnlinkClient` if needed) implementation plus a `Provider`
   enum value; `OAuthService` picks it up automatically. Do not modify existing providers.
 - **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
-- **ISP**: split service interfaces by client need (e.g. `TokenIssueService`,
-  `TokenRefreshService`, `LogoutService`, `TokenRevokeService`). One impl may implement
-  several interfaces; callers depend only on the interface they use.
+- **ISP**: applied pragmatically, not mechanically. See *Service layer* — do not split a
+  service into per-method interfaces just to satisfy ISP.
 - **DIP**: controllers and other services depend on interfaces, never on `*Impl`.
+
+## Service layer
+
+- Default shape: one `XxxService` interface + one `XxxServiceImpl` per domain / feature area
+  (e.g. `MemberService`, `TokenService`, `InterestCarService`, `OAuthService`).
+- Do not split simple CRUD into per-method use-case interfaces (`CreatePostUseCase`,
+  `UpdatePostUseCase`, ...). Create such interfaces only when there is an explicit
+  architectural need.
+- Do not split interfaces just to "apply" SOLID/ISP. This is a layered (3-tier) architecture:
+  a controller depends on a single service, so use-case splitting adds files without giving
+  hexagonal-style boundaries.
+- Introduce an abstraction only when multiple implementations actually exist or a client
+  genuinely needs an isolated dependency (e.g. `SocialTokenVerifier` with Kakao/Google
+  implementations).
 
 ## Coding conventions
 
 ### Naming
-- Service interface: `XxxService`, describing one capability (`MemberQueryService`,
-  `MemberWithdrawService`). Implementation: `XxxServiceImpl` in `service/impl`.
+- Service interface: `XxxService`, one per domain / feature area (`MemberService`).
+  Implementation: `XxxServiceImpl` in `service/impl`.
+- Domain event: past-tense `XxxEvent` record in `event` (`MemberWithdrawnEvent`).
 - Controller: `XxxController`; for auth providers `XxxAuthController`.
 - External API client: `XxxOAuthClient` / `XxxClient` in `client`.
 - DTO: `XxxRequest` / `XxxResponse`, implemented as Java `record`.
@@ -124,13 +141,20 @@ Package rules:
   ```
 - 4-space indentation, no tabs. No wildcard imports. Remove unused imports.
 - Constructor injection only via Lombok `@RequiredArgsConstructor` with `private final` fields.
-- Entities: **every persisted field MUST have `@Column` with its constraints stated explicitly**
-  (`name` when it differs from the default, `nullable`, `length` for strings, `unique`,
-  `updatable` where relevant), including nullable fields. The primary key (`@Id`) is the
-  only exception: it gets no `@Column`.
-- Entities: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`,
-  `@Builder` on a private constructor, extend `BaseTimeEntity` when timestamps are needed,
-  enums stored with `@Enumerated(EnumType.STRING)`.
+- Entities: **every persisted field except the primary key (`@Id`) MUST have `@Column`** with
+  `name` always set, plus only the constraints that differ from JPA defaults
+  (`nullable = false`, `length` when not 255, `unique = true`, `updatable = false`).
+  Do not write default values such as `nullable = true` or `length = 255`.
+  ```java
+  @Column(name = "email", nullable = false)
+  @Column(name = "profile_image_url", length = 500)
+  ```
+- Entities use exactly this Lombok set: `@Getter`,
+  `@NoArgsConstructor(access = AccessLevel.PROTECTED)`,
+  `@AllArgsConstructor(access = AccessLevel.PRIVATE)`, class-level `@Builder`.
+  When creation needs logic (e.g. hashing), add a static factory that uses the builder
+  (`RefreshToken.of(...)`). Extend `BaseTimeEntity` when timestamps are needed; store enums
+  with `@Enumerated(EnumType.STRING)`.
 - Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls,
   method-level `@Transactional` on writes.
 - Constants: `private static final` UPPER_SNAKE_CASE.

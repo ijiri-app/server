@@ -149,8 +149,9 @@ Package rules:
 - Business errors: `throw new CustomException(XxxStatusCode.SOME_ERROR)`.
   Never return error responses manually from controllers; `GlobalExceptionHandler` handles them.
 - Authenticated member id: `@Parameter(hidden = true) @AuthenticationPrincipal String memberId`.
-- Document endpoints with `@Tag` and `@Operation`. Public endpoints use `@SecurityRequirements`
-  (empty) and must be permitted in `SecurityConfig`.
+- Document endpoints with `@Tag` and `@Operation`. `@Operation` is always written multi-line,
+  one attribute (`summary`, `description`) per line, closing `)` on its own line.
+- Public endpoints use `@SecurityRequirements` (empty) and must be permitted in `SecurityConfig`.
 
 ## Security notes
 - JWT subject = member id. Access token 1h, refresh token 28d (`application.yaml`).

@@ -6,11 +6,10 @@ import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.LogoutService;
 import ijiri.ijiriserver.domain.auth.token.service.TokenIssueService;
-import ijiri.ijiriserver.domain.auth.token.service.TokenReissueService;
+import ijiri.ijiriserver.domain.auth.token.service.TokenRefreshService;
 import ijiri.ijiriserver.domain.auth.token.service.TokenRevokeService;
 import ijiri.ijiriserver.domain.member.entity.Member;
-import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
-import ijiri.ijiriserver.domain.member.repository.MemberRepository;
+import ijiri.ijiriserver.domain.member.service.MemberFindService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
@@ -23,10 +22,10 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 @Transactional
 public class RefreshTokenServiceImpl
-        implements TokenIssueService, TokenReissueService, LogoutService, TokenRevokeService {
+        implements TokenIssueService, TokenRefreshService, LogoutService, TokenRevokeService {
 
     private final RefreshTokenRepository refreshTokenRepository;
-    private final MemberRepository memberRepository;
+    private final MemberFindService memberFindService;
     private final JwtProvider jwtProvider;
 
     @Override
@@ -41,7 +40,12 @@ public class RefreshTokenServiceImpl
     }
 
     @Override
-    public TokenResponse reissue(String refreshToken) {
+    public long getAccessTokenExpiresIn() {
+        return jwtProvider.getAccessTokenValiditySeconds();
+    }
+
+    @Override
+    public TokenResponse refresh(String refreshToken) {
         if (!jwtProvider.validateRefreshToken(refreshToken)) {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
@@ -53,14 +57,12 @@ public class RefreshTokenServiceImpl
         }
         refreshTokenRepository.delete(saved);
 
-        Member member = memberRepository.findById(saved.getMemberId())
-                .orElseThrow(() -> new CustomException(MemberStatusCode.MEMBER_NOT_FOUND));
-        return issue(member);
+        return issue(memberFindService.getById(saved.getMemberId()));
     }
 
     @Override
-    public void logout(String refreshToken) {
-        refreshTokenRepository.deleteByTokenHash(RefreshToken.hash(refreshToken));
+    public void logout(Long memberId, String refreshToken) {
+        refreshTokenRepository.deleteByTokenHashAndMemberId(RefreshToken.hash(refreshToken), memberId);
     }
 
     @Override

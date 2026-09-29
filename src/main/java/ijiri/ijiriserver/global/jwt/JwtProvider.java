@@ -62,6 +62,10 @@ public class JwtProvider {
                 .compact();
     }
 
+    public long getAccessTokenValiditySeconds() {
+        return accessTokenValidityMillis / 1000;
+    }
+
     public long getRefreshTokenValiditySeconds() {
         return refreshTokenValidityMillis / 1000;
     }
@@ -90,7 +94,8 @@ public class JwtProvider {
         Claims claims = parse(token);
         String role = claims.get(ROLE_CLAIM, String.class);
         return new UsernamePasswordAuthenticationToken(
-                claims.getSubject(), null, List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role)));
+                claims.getSubject(), null, List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role))
+        );
     }
 
     private Claims parse(String token) {

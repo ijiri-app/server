@@ -9,4 +9,6 @@ import ijiri.ijiriserver.domain.member.entity.Member;
 public interface TokenIssueService {
 
     TokenResponse issue(Member member);
+
+    long getAccessTokenExpiresIn();
 }

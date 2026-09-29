@@ -24,7 +24,7 @@ import java.util.concurrent.ThreadLocalRandom;
 @Transactional(readOnly = true)
 public class MemberServiceImpl implements MemberService {
 
-    private static final String DEFAULT_USERNAME_PREFIX = "이지리오너";
+    private static final String DEFAULT_NICKNAME_PREFIX = "이지리오너";
 
     private final MemberRepository memberRepository;
     private final SocialUnlinkService socialUnlinkService;
@@ -64,17 +64,17 @@ public class MemberServiceImpl implements MemberService {
                 .provider(command.provider())
                 .providerMemberId(command.providerMemberId())
                 .email(command.email())
-                .username(resolveUsername(command.username()))
+                .nickname(resolveNickname(command.nickname()))
                 .profileImageUrl(command.profileImageUrl())
                 .role(Role.USER)
                 .build();
     }
 
-    // username 은 선택 동의라 없을 수 있다. 가입 단계에서 입력받지 않도록 기본값을 만든다
-    private String resolveUsername(String username) {
-        if (StringUtils.hasText(username)) {
-            return username;
+    // nickname 은 선택 동의라 없을 수 있다. 가입 단계에서 입력받지 않도록 기본값을 만든다
+    private String resolveNickname(String nickname) {
+        if (StringUtils.hasText(nickname)) {
+            return nickname;
         }
-        return DEFAULT_USERNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
+        return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
     }
 }

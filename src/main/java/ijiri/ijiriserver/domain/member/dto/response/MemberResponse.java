@@ -9,7 +9,7 @@ public record MemberResponse(
         Long id,
         Provider provider,
         String email,
-        String username,
+        String nickname,
         String profileImageUrl,
         LocalDateTime createdAt
 ) {
@@ -19,7 +19,7 @@ public record MemberResponse(
                 member.getId(),
                 member.getProvider(),
                 member.getEmail(),
-                member.getUsername(),
+                member.getNickname(),
                 member.getProfileImageUrl(),
                 member.getCreatedAt()
         );

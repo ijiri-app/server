@@ -50,7 +50,7 @@ public class OAuthServiceImpl implements OAuthService {
                 info.provider(),
                 info.providerMemberId(),
                 info.email(),
-                info.username(),
+                info.nickname(),
                 info.profileImageUrl()
         ));
         Member member = result.member();

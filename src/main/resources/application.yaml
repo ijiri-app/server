@@ -2,6 +2,10 @@ spring:
   application:
     name: IjiriServer
 
+  # 프로필을 지정하지 않으면 로컬 설정으로 뜬다. 운영은 SPRING_PROFILES_ACTIVE=prod
+  profiles:
+    default: local
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -11,9 +15,9 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
+    username: ${MAIL_USERNAME}
     # Gmail 은 계정 비밀번호가 아니라 앱 비밀번호
-    password: ${MAIL_PASSWORD:}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -26,19 +30,25 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
 
+  jackson:
+    mapper:
+      # provider 를 "kakao" 처럼 소문자로 보내도 enum 으로 받는다
+      accept-case-insensitive-enums: true
+
+# 필수 값은 기본값을 두지 않아, 빠지면 기동 시점에 실패한다
 jwt:
-  secret: ${JWT_SECRET:ijiri-local-test-secret-key-0123456789abcdef}
+  secret: ${JWT_SECRET}
   access-token-validity-seconds: 3600 # 1시간
   refresh-token-validity-seconds: 2419200 # 28일
 
 oauth:
   kakao:
-    app-id: ${KAKAO_APP_ID:0}
+    app-id: ${KAKAO_APP_ID}
     # 회원 탈퇴 시 카카오 연결 끊기 API 호출용 (콘솔 > 앱 키 > Admin 키)
-    admin-key: ${KAKAO_ADMIN_KEY:}
+    admin-key: ${KAKAO_ADMIN_KEY}
   google:
     # Android/iOS/Web 클라이언트 ID 를 콤마로 구분해서 모두 넣는다 (ID token 의 aud 검증용)
     client-ids: ${GOOGLE_CLIENT_IDS}

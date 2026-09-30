@@ -203,10 +203,12 @@ Package rules:
   `cors.allowed-origins`.
 - Sign-out is an authenticated endpoint (`@AuthenticationPrincipal`): expire both cookies and
   delete all of the member's refresh tokens. Withdrawal also expires the cookies.
-- Refresh tokens are stored as SHA-256 hashes only, rotated on reissue (atomic delete),
-  capped at 10 per member (oldest removed), and expired rows are purged daily by
-  `RefreshTokenCleanupScheduler`. A validly signed refresh token that is no longer stored is
-  treated as reuse: all of that member's refresh tokens are revoked.
+- One session per account (no concurrent login): every issue deletes the member's existing
+  refresh tokens before saving the new one, so another device is signed out at its next refresh
+  (its access token stays valid up to 1h). Refresh tokens are stored as SHA-256 hashes only,
+  rotated on reissue (atomic delete); a token that is no longer stored is just rejected (no
+  revoke-all, which would sign out the device that just logged in). Expired rows are purged
+  daily by `RefreshTokenCleanupScheduler`.
 - Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or
   re-register with the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn
   members. `MemberPurgeScheduler` hard-deletes them after 30 days, one transaction per member.

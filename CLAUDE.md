@@ -46,11 +46,11 @@ ijiri.ijiriserver
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
 │   │   ├── oauth                 POST /auth/signin/oauth (provider + token), OAuthController
-│   │   │   ├── controller  dto/request  dto/response  service  service/impl
+│   │   │   ├── controller  dto/request  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
 │   │   └── token                 POST /token/refresh (TokenController)
-│   │       ├── controller  dto/request  dto/response  entity
+│   │       ├── controller  dto/request  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
 │   │   ├── controller  dto  dto/response  entity  event  exception
@@ -64,12 +64,18 @@ ijiri.ijiriserver
     ├── entity                    BaseTimeEntity
     ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
     │                             CustomErrorController (/error -> BaseResponse)
-    ├── jwt                       JwtProvider, JwtAuthenticationFilter
+    ├── jwt                       JwtProvider, JwtAuthenticationFilter, JwtCookieManager,
+    │                             SessionValidator
     ├── ratelimit                 RateLimiter (in-memory fixed window)
     ├── response                  BaseResponse
     ├── security                  401/403 handlers returning BaseResponse
     └── validation                @MaxUtf8Bytes
 ```
+
+Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`).
+Tests: `src/test/resources/application-test.yaml` (H2 in PostgreSQL mode + dummy secrets), so
+`./gradlew test` needs neither a database nor `.env`. `@SpringBootTest` classes use
+`@ActiveProfiles("test")`.
 
 Package rules:
 - A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
@@ -92,8 +98,10 @@ Package rules:
 - **Cross-domain cleanup** goes through member events; `member` never calls other domains'
   services (no package cycles).
   - `MemberWithdrawnEvent` (soft delete moment): things that must happen immediately
-    (revoke tokens, social unlink, hide posts). External calls listen with
-    `@TransactionalEventListener(phase = BEFORE_COMMIT)`.
+    (revoke tokens, social unlink, hide posts). External API calls listen with
+    `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold a DB connection;
+    they catch and log failures, and anything that must eventually succeed is retried from a
+    `MemberPurgedEvent` listener (e.g. Kakao unlink).
   - `MemberPurgedEvent` (row hard-deleted after 30 days): delete the member's data, including
     uploaded files in storage. Listeners must be idempotent (a failure rolls back and retries).
 - **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
@@ -121,15 +129,19 @@ Package rules:
 - Service interface: `XxxService`, one per domain / feature area (`MemberService`).
   Implementation: `XxxServiceImpl` in `service/impl`.
 - Domain event: past-tense `XxxEvent` record in `event` (`MemberWithdrawnEvent`).
-- Controller: `XxxController`; for auth providers `XxxAuthController`.
-- External API client: `XxxOAuthClient` / `XxxClient` in `client`.
+- Controller: `XxxController` named after the feature (`AuthController`, `OAuthController`,
+  `EmailVerificationController`, `TokenController`). Providers have no controllers; they only
+  plug a `client` into `OAuthService`.
+- External API / infrastructure client: `XxxOAuthClient` or `XxxClient` in `client`
+  (`KakaoOAuthClient`, `KakaoUnlinkClient`, `VerificationMailClient`).
 - DTO: Java `record`. Requests are `XxxRequest` per endpoint. Responses are **one per domain**
   (`AuthResponse`, `MemberResponse`, `InterestCarResponse`) with static factories per use
   (`AuthResponse.tokens(...)`, `AuthResponse.message(...)`) and `@JsonInclude(NON_NULL)` when
   fields are optional. Do not create a new response class per API.
 - Status code enum per domain: `XxxStatusCode implements StatusCode`.
 - Tables: snake_case singular (`member`, `refresh_token`). Unique/index names:
-  `uk_<table>_<columns>`, `idx_<table>_<columns>`.
+  `uk_<table>_<columns>`, `idx_<table>_<columns>`, declared in `@Table(uniqueConstraints/indexes)`
+  and in the migration with the same name. Never use `@Column(unique = true)` (auto-generated name).
 
 ### Java style
 - Max line length **120**. Break long lines: method chains one call per line,
@@ -149,10 +161,12 @@ Package rules:
   )
   ```
 - 4-space indentation, no tabs. No wildcard imports. Remove unused imports.
-- Constructor injection only via Lombok `@RequiredArgsConstructor` with `private final` fields.
+- Constructor injection only, with `private final` fields. Use Lombok `@RequiredArgsConstructor`
+  unless the constructor needs `@Value` parameters or builds a field from its arguments
+  (e.g. `Map<Provider, SocialTokenVerifier>`, a configured `RestClient`); then write it by hand.
 - Entities: **every persisted field except the primary key (`@Id`) MUST have `@Column`** with
   `name` always set, plus only the constraints that differ from JPA defaults
-  (`nullable = false`, `length` when not 255, `unique = true`, `updatable = false`).
+  (`nullable = false`, `length` when not 255, `updatable = false`).
   Never write JPA default values: `nullable = true`, `length = 255`, `unique = false`,
   `updatable = true`, `insertable = true`.
   ```java
@@ -165,6 +179,9 @@ Package rules:
   When creation needs logic (e.g. hashing), add a static factory that uses the builder
   (`RefreshToken.of(...)`). Extend `BaseTimeEntity` when timestamps are needed; store enums
   with `@Enumerated(EnumType.STRING)`.
+- Schema changes: add a new Flyway migration `V{n+1}__description.sql` in the same change as the
+  entity change. Never edit a migration that has been applied. `ddl-auto` is `validate` in every
+  profile. Do not add CHECK constraints for enum columns (adding an enum value would need a migration).
 - Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls,
   method-level `@Transactional` on writes.
 - Constants: `private static final` UPPER_SNAKE_CASE.
@@ -180,7 +197,8 @@ Package rules:
   - Error: `BaseResponse.onFailure(statusCode[, detail])`, produced only by
     `GlobalExceptionHandler` and the Spring Security handlers in `global/security`.
   - Never return raw DTOs, entities, `ResponseEntity<Dto>`, `void`, or Spring's default
-    error body from any endpoint.
+    error body from any endpoint. Only the error handlers (`GlobalExceptionHandler`,
+    `CustomErrorController`) return `ResponseEntity<BaseResponse<?>>` to set the HTTP status.
 - Every service method called by a controller returns its domain's response DTO, never `void`
   or a primitive/wrapper. When there is nothing else to return, return a message
   (e.g. `AuthResponse.message(...)`). Never return entities from controllers. Internal service-to-service
@@ -215,11 +233,14 @@ Package rules:
   daily by `RefreshTokenCleanupScheduler`.
 - Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or
   re-register with the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn
-  members. `MemberPurgeScheduler` hard-deletes them after 30 days, one transaction per member.
+  members (refresh of a withdrawn member's token is `AUTH4012`, not 404). `MemberPurgeScheduler`
+  hard-deletes them after 30 days, one transaction per member. Kakao unlink runs after the
+  withdrawal commit; if it fails it is retried before the purge (unlinking twice is harmless).
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use
   `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
 - Email sign-up is 3 steps: send code -> verify code -> sign up. Code: 6 digits bound to that
-  email, valid 5 min, 5 attempts, 60 s resend cooldown (resend resets verification).
+  email, valid 5 min, 5 attempts, 60 s resend cooldown (resend resets verification;
+  the row is locked so concurrent resends cannot send two codes).
   Verifying marks the row verified and gives 30 min to sign up; sign-up atomically consumes
   the verified row (one verification = one sign-up), creates the member and signs in
   (tokens in body + cookies, `isNewMember = true`). For an already registered email the
@@ -231,11 +252,15 @@ Package rules:
 - Passwords: 8-20 chars, at least one letter and one digit,
   and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
+  Social nicknames follow the same 2-12 chars rule: longer ones are cut to 12, missing or shorter
+  ones get a default (`이지리오너` + 4 digits).
+- Kakao API: only 400/401 mean an invalid provider token (`AUTH4011`); other errors (e.g. 429)
+  are `SOCIAL_SERVER_ERROR` (`AUTH502`).
 - Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
 - Secrets come from `.env` (never commit it). Never log tokens or secrets.
-- Profiles: `local` (default; ddl-auto update, show-sql, dev JWT secret fallback) and `prod`
-  (set `SPRING_PROFILES_ACTIVE=prod`; ddl-auto validate, every secret required, forwarded
-  headers for client IP).
+- Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod`
+  (set `SPRING_PROFILES_ACTIVE=prod`; every secret required, forwarded headers for client IP)
+  and `test` (H2, used by tests only). All profiles run Flyway and `ddl-auto: validate`.
 
 ## Commit convention
 

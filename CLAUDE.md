@@ -210,7 +210,8 @@ Package rules:
   Sign-up verifies the code first, then creates the member.
 - Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP,
   verification-code 10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
-- Passwords: 8-64 chars and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
+- Passwords: 8-64 chars, at least one letter, one digit and one special character,
+  and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
 - Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
 - Secrets come from `.env` (never commit it). Never log tokens or secrets.

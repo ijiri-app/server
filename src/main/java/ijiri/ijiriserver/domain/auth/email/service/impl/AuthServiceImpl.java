@@ -74,7 +74,7 @@ public class AuthServiceImpl implements AuthService {
         return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
     }
 
-    // 모든 기기에서 로그아웃. access token 은 stateless 라 만료(최대 1시간)까지 유효하다
+    // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
     @Transactional
     public AuthResponse signOut(Long memberId) {

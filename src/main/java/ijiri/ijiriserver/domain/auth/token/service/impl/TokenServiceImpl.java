@@ -9,16 +9,18 @@ import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
+import ijiri.ijiriserver.global.jwt.SessionValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class TokenServiceImpl implements TokenService {
+public class TokenServiceImpl implements TokenService, SessionValidator {
 
     private final RefreshTokenRepository refreshTokenRepository;
     private final MemberService memberService;
@@ -26,17 +28,18 @@ public class TokenServiceImpl implements TokenService {
     private final Clock clock;
 
     // 동시 접속 차단: 한 계정은 refresh token 을 하나만 가진다.
-    // 새로 발급할 때 기존 토큰을 모두 지워, 다른 기기의 로그인은 다음 갱신 시점에 끊긴다
+    // 새로 발급할 때 기존 토큰(세션)을 모두 지워, 다른 기기의 access token 도 즉시 거부된다
     @Override
     @Transactional
     public AuthResponse issue(Member member) {
         String subject = String.valueOf(member.getId());
-        String accessToken = jwtProvider.createAccessToken(subject, member.getRole().name());
-        String refreshToken = jwtProvider.createRefreshToken(subject);
+        String sessionId = UUID.randomUUID().toString();
+        String accessToken = jwtProvider.createAccessToken(subject, member.getRole().name(), sessionId);
+        String refreshToken = jwtProvider.createRefreshToken(subject, sessionId);
 
         LocalDateTime expiresAt = LocalDateTime.now(clock).plusSeconds(jwtProvider.getRefreshTokenValiditySeconds());
         refreshTokenRepository.deleteAllByMemberId(member.getId());
-        refreshTokenRepository.save(RefreshToken.of(member.getId(), refreshToken, expiresAt));
+        refreshTokenRepository.save(RefreshToken.of(member.getId(), sessionId, refreshToken, expiresAt));
         return AuthResponse.tokens(accessToken, refreshToken, jwtProvider.getAccessTokenValiditySeconds());
     }
 
@@ -58,5 +61,12 @@ public class TokenServiceImpl implements TokenService {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
         return issue(memberService.getById(Long.valueOf(jwtProvider.getSubject(refreshToken))));
+    }
+
+    // 인증이 필요한 모든 요청에서 호출된다 (session_id 유니크 인덱스 조회 1회)
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isActive(String sessionId) {
+        return refreshTokenRepository.existsBySessionIdAndExpiresAtAfter(sessionId, LocalDateTime.now(clock));
     }
 }

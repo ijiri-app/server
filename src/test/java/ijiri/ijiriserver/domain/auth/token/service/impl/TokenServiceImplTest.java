@@ -15,9 +15,11 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -54,7 +56,7 @@ class TokenServiceImplTest {
 
     @Test
     void 저장되지_않은_토큰은_거부하되_다른_기기의_토큰은_건드리지_않는다() {
-        String replacedToken = jwtProvider.createRefreshToken("7");
+        String replacedToken = jwtProvider.createRefreshToken("7", "session-1");
         when(refreshTokenRepository.deleteValidByTokenHash(anyString(), any())).thenReturn(0);
 
         assertThatThrownBy(() -> tokenService.refresh(replacedToken)).isInstanceOf(CustomException.class);
@@ -63,8 +65,16 @@ class TokenServiceImplTest {
     }
 
     @Test
+    void 세션의_refresh_token_이_남아_있어야_access_token_이_유효하다() {
+        when(refreshTokenRepository.existsBySessionIdAndExpiresAtAfter(eq("session-1"), any())).thenReturn(true);
+
+        assertThat(tokenService.isActive("session-1")).isTrue();
+        assertThat(tokenService.isActive("deleted-session")).isFalse();
+    }
+
+    @Test
     void access_token_으로는_갱신할_수_없다() {
-        String accessToken = jwtProvider.createAccessToken("7", "USER");
+        String accessToken = jwtProvider.createAccessToken("7", "USER", "session-1");
 
         assertThatThrownBy(() -> tokenService.refresh(accessToken)).isInstanceOf(CustomException.class);
         verify(refreshTokenRepository, never()).deleteValidByTokenHash(anyString(), any());

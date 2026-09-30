@@ -14,7 +14,6 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 @Component
 public class JwtProvider {
@@ -23,6 +22,8 @@ public class JwtProvider {
     // Spring Security 의 hasRole() 은 "ROLE_" 접두사가 붙은 authority 를 기대한다
     private static final String ROLE_PREFIX = "ROLE_";
     private static final String TYPE_CLAIM = "type";
+    // access token 이 속한 로그인 세션. refresh token 의 jti 와 같은 값
+    private static final String SESSION_CLAIM = "sid";
     private static final String ACCESS_TYPE = "access";
     private static final String REFRESH_TYPE = "refresh";
 
@@ -40,11 +41,12 @@ public class JwtProvider {
         this.refreshTokenValidityMillis = refreshTokenValiditySeconds * 1000;
     }
 
-    public String createAccessToken(String subject, String role) {
+    public String createAccessToken(String subject, String role, String sessionId) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(subject)
                 .claim(ROLE_CLAIM, role)
+                .claim(SESSION_CLAIM, sessionId)
                 .claim(TYPE_CLAIM, ACCESS_TYPE)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessTokenValidityMillis))
@@ -52,11 +54,11 @@ public class JwtProvider {
                 .compact();
     }
 
-    public String createRefreshToken(String subject) {
+    public String createRefreshToken(String subject, String sessionId) {
         Date now = new Date();
         return Jwts.builder()
                 .subject(subject)
-                .id(UUID.randomUUID().toString())
+                .id(sessionId)
                 .claim(TYPE_CLAIM, REFRESH_TYPE)
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + refreshTokenValidityMillis))
@@ -82,6 +84,10 @@ public class JwtProvider {
 
     public String getSubject(String token) {
         return parse(token).getSubject();
+    }
+
+    public String getSessionId(String accessToken) {
+        return parse(accessToken).get(SESSION_CLAIM, String.class);
     }
 
     private boolean hasType(String token, String type) {

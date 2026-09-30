@@ -15,6 +15,8 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Query("DELETE FROM RefreshToken r WHERE r.tokenHash = :tokenHash AND r.expiresAt > :now")
     int deleteValidByTokenHash(@Param("tokenHash") String tokenHash, @Param("now") LocalDateTime now);
 
+    boolean existsBySessionIdAndExpiresAtAfter(String sessionId, LocalDateTime now);
+
     @Modifying
     @Query("DELETE FROM RefreshToken r WHERE r.memberId = :memberId")
     int deleteAllByMemberId(@Param("memberId") Long memberId);

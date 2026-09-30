@@ -74,8 +74,11 @@ ijiri.ijiriserver
 ```
 
 Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`).
-Tests: `src/test/resources/application-test.yaml` (H2 in PostgreSQL mode + dummy secrets), so
-`./gradlew test` needs neither a database nor `.env`. `@SpringBootTest` classes use `@ActiveProfiles("test")`.
+Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
+with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
+`@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc
+integration tests through the real filter chain (`AuthFlowIntegrationTest`); extend them when changing
+`SecurityConfig` paths or the auth flow.
 
 Package rules:
 - A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
@@ -190,13 +193,17 @@ These are invariants. Do not change them without being asked, and keep this sect
   SameSite=None) via `JwtCookieManager`. Access token: `Authorization` header first, then cookie.
   Refresh: body first, then cookie.
 - CSRF: cookie tokens are ignored when the request's `Origin` is not in `cors.allowed-origins`.
-- One session per account: every issue deletes the member's existing refresh tokens before saving the new one.
+- One session per account: every issue deletes the member's existing refresh tokens before saving the new one,
+  and `refresh_token.member_id` is unique, so concurrent sign-ins leave one session (the loser gets 409).
 - Session model: `refresh_token.session_id` = refresh `jti` = access `sid` claim. `JwtAuthenticationFilter`
   accepts an access token only while its session row exists (`SessionValidator`), so deleting refresh tokens
   (sign-out, login elsewhere, withdrawal) invalidates paired access tokens immediately.
 - Refresh tokens are stored as SHA-256 hashes only and rotated on reissue (atomic delete). A token no longer
   stored is simply rejected (no revoke-all). Expired rows are purged daily by `RefreshTokenCleanupScheduler`.
-- Sign-out is authenticated: expire both cookies and delete all the member's refresh tokens.
+- Sign-out (`/auth/signout`, permitted in `SecurityConfig`): with a valid access token, delete all the
+  member's refresh tokens; otherwise delete the session of the refresh token from the body or cookie
+  (so sign-out works after the access token expires). Always expire both cookies. Anonymous authentication
+  is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
   Withdrawal also expires the cookies.
 - Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or re-register with
   the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn members (refresh is `AUTH4012`,
@@ -221,6 +228,19 @@ These are invariants. Do not change them without being asked, and keep this sect
   every secret required, no fallbacks, forwarded headers for client IP), `test` (H2, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
+## Operational notes
+
+Not problems today; revisit when the deployment changes.
+
+- `RateLimiter` and the registered-email notice cooldown are in memory: with several instances each counts
+  separately. Move them to Redis when scaling out.
+- Every authenticated request looks up `session_id` once; add a cache if traffic grows.
+- `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
+  load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
+  Check against the actual deployment.
+- If Kakao unlink fails after withdrawal, the link stays visible in the user's Kakao account until the purge
+  retry (up to 30 days).
+
 ## Commit convention
 
 - Commit messages always in English.
@@ -236,5 +256,5 @@ These are invariants. Do not change them without being asked, and keep this sect
 
 ## Commands
 
-- Build & test: `./gradlew test` (no DB or `.env` needed)
+- Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed)
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)

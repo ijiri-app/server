@@ -6,6 +6,7 @@ import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
+import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import ijiri.ijiriserver.global.response.BaseResponse;
@@ -78,8 +79,8 @@ public class AuthController {
 
     @Operation(
             summary = "로그아웃",
-            description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, 없으면 body 또는 쿠키의 "
-                    + "refreshToken 세션을 지운다. 토큰이 하나도 없어도 쿠키를 만료시키고 성공으로 응답한다"
+            description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, 없으면 body(앱) 또는 쿠키(웹)의 "
+                    + "refreshToken 세션을 지우고 토큰 쿠키를 만료시킨다. 토큰이 하나도 없으면 로그인 상태가 아니므로 401"
     )
     @PostMapping("/signout")
     public BaseResponse<AuthResponse> signOut(
@@ -88,15 +89,17 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        // 로그아웃은 몇 번 호출해도 결과가 같다. 지울 세션이 없어도 쿠키는 항상 만료시키고 성공으로 응답한다
-        jwtCookieManager.expireTokenCookies(httpResponse);
         if (memberId != null) {
+            jwtCookieManager.expireTokenCookies(httpResponse);
             return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, authService.signOut(Long.valueOf(memberId)));
         }
+        // 토큰이 하나도 없으면 로그인 상태가 아니므로 갱신 API 와 같은 코드(AUTH4012)로 거부한다.
+        // refresh token 이 있으면 이미 만료·삭제된 세션이어도 남은 쿠키를 지우도록 성공으로 응답한다
         String bodyToken = request == null ? null : request.refreshToken();
-        AuthResponse response = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
-                .map(authService::signOutByRefreshToken)
-                .orElseGet(() -> AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage()));
+        String refreshToken = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
+                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
+        AuthResponse response = authService.signOutByRefreshToken(refreshToken);
+        jwtCookieManager.expireTokenCookies(httpResponse);
         return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
     }
 }

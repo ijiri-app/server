@@ -203,8 +203,9 @@ These are invariants. Do not change them without being asked, and keep this sect
   stored is simply rejected (no revoke-all). Expired rows are purged daily by `RefreshTokenCleanupScheduler`.
 - Sign-out (`/auth/signout`, permitted in `SecurityConfig`): with a valid access token, delete all the
   member's refresh tokens; otherwise delete the session of the refresh token from the body or cookie
-  (so sign-out works after the access token expires). Always expire both cookies and answer 200
-  (`AUTH2002`), even when no token was sent: sign-out is idempotent and never an error. Anonymous authentication
+  (so sign-out works after the access token expires; apps send it in the body, web sends the HttpOnly
+  cookie). Expire both cookies and answer 200 (`AUTH2002`) whenever a token was sent, even if its session
+  is already gone. With no token at all the caller is not signed in: 401 `AUTH4012` (same as refresh). Anonymous authentication
   is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
   Withdrawal also expires the cookies.
 - Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or re-register with

@@ -116,10 +116,20 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
-    void 토큰이_하나도_없어도_로그아웃은_성공하고_쿠키를_만료시킨다() throws Exception {
+    void 토큰이_하나도_없으면_로그인_상태가_아니므로_로그아웃은_401() throws Exception {
         mockMvc.perform(post("/auth/signout"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("AUTH4012"));
+    }
+
+    @Test
+    void 이미_지워진_refresh_token_으로_로그아웃해도_남은_쿠키를_만료시킨다() throws Exception {
+        Tokens tokens = signup(newEmail());
+        String body = "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken());
+        postJson("/auth/signout", body).andExpect(status().isOk());
+
+        postJson("/auth/signout", body)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("AUTH2002"))
                 .andExpect(cookie().maxAge("accessToken", 0))
                 .andExpect(cookie().maxAge("refreshToken", 0));
     }

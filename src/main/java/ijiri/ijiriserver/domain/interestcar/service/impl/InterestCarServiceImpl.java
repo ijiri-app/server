@@ -31,8 +31,7 @@ public class InterestCarServiceImpl implements InterestCarService {
 
         memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
         List<MemberInterestCar> interestCars = IntStream.range(0, carModelIds.size())
-                .mapToObj(
-                        order -> MemberInterestCar.builder()
+                .mapToObj(order -> MemberInterestCar.builder()
                         .memberId(memberId)
                         .carModelId(carModelIds.get(order))
                         .displayOrder(order)

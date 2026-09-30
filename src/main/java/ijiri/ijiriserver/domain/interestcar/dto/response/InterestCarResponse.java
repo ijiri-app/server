@@ -11,8 +11,8 @@ public record InterestCarResponse(
     public static InterestCarResponse from(List<MemberInterestCar> interestCars) {
         return new InterestCarResponse(
                 interestCars.stream()
-                .map(MemberInterestCar::getCarModelId)
-                .toList()
+                        .map(MemberInterestCar::getCarModelId)
+                        .toList()
         );
     }
 }

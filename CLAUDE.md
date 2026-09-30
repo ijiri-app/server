@@ -78,7 +78,8 @@ Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcon
 with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
 `@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc
 integration tests through the real filter chain (`AuthFlowIntegrationTest`); extend them when changing
-`SecurityConfig` paths or the auth flow.
+`SecurityConfig` paths or the auth flow. Rate limits are in memory and shared across tests in one context,
+so integration tests give each request its own remote IP.
 
 Package rules:
 - A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
@@ -202,7 +203,8 @@ These are invariants. Do not change them without being asked, and keep this sect
   stored is simply rejected (no revoke-all). Expired rows are purged daily by `RefreshTokenCleanupScheduler`.
 - Sign-out (`/auth/signout`, permitted in `SecurityConfig`): with a valid access token, delete all the
   member's refresh tokens; otherwise delete the session of the refresh token from the body or cookie
-  (so sign-out works after the access token expires). Always expire both cookies. Anonymous authentication
+  (so sign-out works after the access token expires). Always expire both cookies and answer 200
+  (`AUTH2002`), even when no token was sent: sign-out is idempotent and never an error. Anonymous authentication
   is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
   Withdrawal also expires the cookies.
 - Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or re-register with
@@ -256,5 +258,6 @@ Not problems today; revisit when the deployment changes.
 
 ## Commands
 
-- Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed)
+- Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
+  CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)

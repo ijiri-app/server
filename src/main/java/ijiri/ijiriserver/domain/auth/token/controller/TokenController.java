@@ -13,13 +13,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
-import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Optional;
 
 @Tag(name = "Auth", description = "회원가입 / 로그인 / 토큰")
 @RestController
@@ -33,7 +30,7 @@ public class TokenController {
     @Operation(
             summary = "토큰 갱신",
             description = "body 의 refreshToken, 없으면 refreshToken 쿠키로 토큰을 새로 발급하고 쿠키에도 저장. "
-                    + "이미 교체된 토큰이 다시 오면 탈취로 보고 회원의 모든 refresh token 을 폐기"
+                    + "이미 교체됐거나 로그아웃·다른 기기 로그인으로 지워진 토큰은 거부(AUTH4012)"
     )
     @SecurityRequirements
     @PostMapping("/refresh")
@@ -42,10 +39,8 @@ public class TokenController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        String refreshToken = Optional.ofNullable(request)
-                .map(RefreshTokenRequest::refreshToken)
-                .filter(StringUtils::hasText)
-                .or(() -> jwtCookieManager.resolveRefreshToken(httpRequest))
+        String bodyToken = request == null ? null : request.refreshToken();
+        String refreshToken = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
 
         AuthResponse tokens = tokenService.refresh(refreshToken);

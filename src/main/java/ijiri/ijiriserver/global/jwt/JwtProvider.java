@@ -75,19 +75,19 @@ public class JwtProvider {
         return refreshTokenValidityMillis / 1000;
     }
 
-    public boolean validateRefreshToken(String token) {
-        return hasType(token, REFRESH_TYPE);
-    }
-
-    public String getSubject(String token) {
-        return parse(token).getSubject();
-    }
-
     // 서명·만료·토큰 종류를 한 번의 파싱으로 검증하고, 이후 필요한 값은 이 claims 에서 꺼낸다
     public Optional<Claims> parseAccessToken(String token) {
+        return parseWithType(token, ACCESS_TYPE);
+    }
+
+    public Optional<Claims> parseRefreshToken(String token) {
+        return parseWithType(token, REFRESH_TYPE);
+    }
+
+    private Optional<Claims> parseWithType(String token, String type) {
         try {
             Claims claims = parse(token);
-            return ACCESS_TYPE.equals(claims.get(TYPE_CLAIM, String.class)) ? Optional.of(claims) : Optional.empty();
+            return type.equals(claims.get(TYPE_CLAIM, String.class)) ? Optional.of(claims) : Optional.empty();
         } catch (JwtException | IllegalArgumentException e) {
             return Optional.empty();
         }
@@ -95,14 +95,6 @@ public class JwtProvider {
 
     public String getSessionId(Claims accessClaims) {
         return accessClaims.get(SESSION_CLAIM, String.class);
-    }
-
-    private boolean hasType(String token, String type) {
-        try {
-            return type.equals(parse(token).get(TYPE_CLAIM, String.class));
-        } catch (JwtException | IllegalArgumentException e) {
-            return false;
-        }
     }
 
     public Authentication getAuthentication(Claims claims) {

@@ -11,6 +11,7 @@ import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import ijiri.ijiriserver.global.jwt.SessionValidator;
+import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -52,9 +53,8 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
     @Override
     @Transactional
     public AuthResponse refresh(String refreshToken) {
-        if (!jwtProvider.validateRefreshToken(refreshToken)) {
-            throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
-        }
+        Claims claims = jwtProvider.parseRefreshToken(refreshToken)
+                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
         int deleted = refreshTokenRepository.deleteValidByTokenHash(
                 RefreshToken.hash(refreshToken),
                 LocalDateTime.now(clock)
@@ -63,7 +63,7 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
         // 탈퇴 등으로 활성 회원이 아니면 앱이 로그인 화면으로 가도록 404 가 아닌 401 로 응답한다
-        Member member = memberService.findActiveMember(Long.valueOf(jwtProvider.getSubject(refreshToken)))
+        Member member = memberService.findActiveMember(Long.valueOf(claims.getSubject()))
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
         return issue(member);
     }
@@ -73,6 +73,15 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
     @Transactional
     public AuthResponse signOut(Long memberId) {
         refreshTokenRepository.deleteAllByMemberId(memberId);
+        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
+    }
+
+    // access token 이 만료돼도 로그아웃할 수 있게 refresh token 으로 세션을 지운다.
+    // 저장된 토큰과 해시가 같아야만 지워지므로 서명·만료 검사는 필요 없고, 없는 토큰이어도 같은 응답을 준다
+    @Override
+    @Transactional
+    public AuthResponse signOutByRefreshToken(String refreshToken) {
+        refreshTokenRepository.deleteByTokenHash(RefreshToken.hash(refreshToken));
         return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
     }
 

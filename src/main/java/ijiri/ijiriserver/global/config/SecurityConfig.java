@@ -51,6 +51,8 @@ public class SecurityConfig {
         return http
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
+                // 익명 사용자("anonymousUser")를 principal 로 넣지 않아, 인증이 없으면 @AuthenticationPrincipal 이 null 이 된다
+                .anonymous(AbstractHttpConfigurer::disable)
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -68,7 +70,8 @@ public class SecurityConfig {
                                 "/auth/email/verification-code",
                                 "/auth/email/verification-code/verify",
                                 "/auth/signin",
-                                "/token/refresh"
+                                "/token/refresh",
+                                "/auth/signout"
                         ).permitAll()
                         .requestMatchers(
                                 "/error"

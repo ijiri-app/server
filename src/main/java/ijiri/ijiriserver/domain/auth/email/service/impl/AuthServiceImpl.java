@@ -74,4 +74,9 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse signOut(Long memberId) {
         return tokenService.signOut(memberId);
     }
+
+    @Override
+    public AuthResponse signOutByRefreshToken(String refreshToken) {
+        return tokenService.signOutByRefreshToken(refreshToken);
+    }
 }

@@ -5,6 +5,9 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
+import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
+import ijiri.ijiriserver.global.exception.CommonStatusCode;
+import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import ijiri.ijiriserver.global.response.BaseResponse;
@@ -77,16 +80,26 @@ public class AuthController {
 
     @Operation(
             summary = "로그아웃",
-            description = "Authorization 헤더 또는 accessToken 쿠키의 회원을 로그아웃. "
-                    + "토큰 쿠키를 만료시키고 refresh token 을 모두 삭제(모든 기기 로그아웃)"
+            description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, "
+                    + "access token 이 만료됐으면 body 또는 쿠키의 refreshToken 세션을 지운다. 토큰 쿠키도 만료"
     )
     @PostMapping("/signout")
     public BaseResponse<AuthResponse> signOut(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
+            @RequestBody(required = false) RefreshTokenRequest request,
+            HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        AuthResponse response = authService.signOut(Long.valueOf(memberId));
+        AuthResponse response = memberId != null
+                ? authService.signOut(Long.valueOf(memberId))
+                : authService.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
         jwtCookieManager.expireTokenCookies(httpResponse);
         return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
+    }
+
+    private String resolveRefreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        String bodyToken = request == null ? null : request.refreshToken();
+        return jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
+                .orElseThrow(() -> new CustomException(CommonStatusCode.UNAUTHORIZED));
     }
 }

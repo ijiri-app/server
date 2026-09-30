@@ -54,7 +54,11 @@ public class JwtCookieManager {
         return getCookie(request, ACCESS_TOKEN_COOKIE);
     }
 
-    public Optional<String> resolveRefreshToken(HttpServletRequest request) {
+    // 앱은 body 로, 웹은 쿠키로 보낸다
+    public Optional<String> resolveRefreshToken(HttpServletRequest request, String bodyToken) {
+        if (StringUtils.hasText(bodyToken)) {
+            return Optional.of(bodyToken);
+        }
         return getCookie(request, REFRESH_TOKEN_COOKIE);
     }
 

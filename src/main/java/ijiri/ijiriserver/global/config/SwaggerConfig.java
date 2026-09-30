@@ -16,12 +16,12 @@ public class SwaggerConfig {
 
     @Bean
     public OpenAPI openAPI() {
-
         return new OpenAPI()
                 .info(new Info()
                         .title("Ijiri Server API")
                         .description("Ijiri Server API 문서")
-                        .version("1.0.0"))
+                        .version("1.0.0")
+                )
                 // 상대 경로라 로컬/배포 환경 어디서 열어도 현재 호스트로 요청
                 .addServersItem(new Server().url("/"))
                 .addSecurityItem(new SecurityRequirement().addList(JWT_SCHEME_NAME))
@@ -30,6 +30,8 @@ public class SwaggerConfig {
                                 .name(JWT_SCHEME_NAME)
                                 .type(SecurityScheme.Type.HTTP)
                                 .scheme("bearer")
-                                .bearerFormat("JWT")));
+                                .bearerFormat("JWT")
+                        )
+                );
     }
 }

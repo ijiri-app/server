@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.auth.token.service.impl;
 
+import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Role;
@@ -8,16 +9,16 @@ import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
-import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,12 +44,21 @@ class TokenServiceImplTest {
     }
 
     @Test
-    void 서명이_유효하지만_저장되지_않은_토큰은_재사용으로_보고_회원의_토큰을_모두_폐기한다() {
-        String rotatedToken = jwtProvider.createRefreshToken("7");
+    void 발급하면_기존_토큰을_모두_지우고_새_토큰_하나만_저장한다() {
+        tokenService.issue(Member.builder().id(7L).role(Role.USER).build());
+
+        InOrder order = inOrder(refreshTokenRepository);
+        order.verify(refreshTokenRepository).deleteAllByMemberId(7L);
+        order.verify(refreshTokenRepository).save(any(RefreshToken.class));
+    }
+
+    @Test
+    void 저장되지_않은_토큰은_거부하되_다른_기기의_토큰은_건드리지_않는다() {
+        String replacedToken = jwtProvider.createRefreshToken("7");
         when(refreshTokenRepository.deleteValidByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThatThrownBy(() -> tokenService.refresh(rotatedToken)).isInstanceOf(CustomException.class);
-        verify(refreshTokenRepository).deleteAllByMemberId(7L);
+        assertThatThrownBy(() -> tokenService.refresh(replacedToken)).isInstanceOf(CustomException.class);
+        verify(refreshTokenRepository, never()).deleteAllByMemberId(any());
         verify(memberService, never()).getById(any());
     }
 
@@ -57,16 +67,6 @@ class TokenServiceImplTest {
         String accessToken = jwtProvider.createAccessToken("7", "USER");
 
         assertThatThrownBy(() -> tokenService.refresh(accessToken)).isInstanceOf(CustomException.class);
-        verify(refreshTokenRepository, never()).deleteAllByMemberId(any());
-    }
-
-    @Test
-    void 회원당_상한을_넘는_오래된_토큰을_지운다() {
-        when(refreshTokenRepository.findIdsByMemberIdNewestFirst(7L))
-                .thenReturn(LongStream.rangeClosed(1, 12).map(i -> 13 - i).boxed().toList());
-
-        tokenService.issue(Member.builder().id(7L).role(Role.USER).build());
-
-        verify(refreshTokenRepository).deleteAllByIdIn(List.of(2L, 1L));
+        verify(refreshTokenRepository, never()).deleteValidByTokenHash(anyString(), any());
     }
 }

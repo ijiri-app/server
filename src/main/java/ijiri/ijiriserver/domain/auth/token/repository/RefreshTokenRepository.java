@@ -7,7 +7,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
@@ -15,13 +14,6 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
     @Modifying
     @Query("DELETE FROM RefreshToken r WHERE r.tokenHash = :tokenHash AND r.expiresAt > :now")
     int deleteValidByTokenHash(@Param("tokenHash") String tokenHash, @Param("now") LocalDateTime now);
-
-    @Query("SELECT r.id FROM RefreshToken r WHERE r.memberId = :memberId ORDER BY r.id DESC")
-    List<Long> findIdsByMemberIdNewestFirst(@Param("memberId") Long memberId);
-
-    @Modifying
-    @Query("DELETE FROM RefreshToken r WHERE r.id IN :ids")
-    int deleteAllByIdIn(@Param("ids") List<Long> ids);
 
     @Modifying
     @Query("DELETE FROM RefreshToken r WHERE r.memberId = :memberId")

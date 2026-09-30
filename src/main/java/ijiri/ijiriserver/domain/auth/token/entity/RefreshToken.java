@@ -20,8 +20,7 @@ import java.time.LocalDateTime;
 import java.util.HexFormat;
 
 /**
- * 기기(로그인)마다 한 줄. 재발급 시 기존 토큰은 지우고 새로 저장한다(rotation).
- * 회원당 최대 개수를 넘으면 오래된 것부터 지운다.
+ * 회원당 한 줄(동시 접속 차단). 로그인/재발급 때마다 기존 토큰을 지우고 새로 저장한다.
  * DB 유출 시 바로 쓸 수 없도록 원문 대신 SHA-256 해시만 저장한다.
  */
 @Entity

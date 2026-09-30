@@ -204,8 +204,12 @@ Package rules:
 - Sign-out is an authenticated endpoint (`@AuthenticationPrincipal`): expire both cookies and
   delete all of the member's refresh tokens. Withdrawal also expires the cookies.
 - One session per account (no concurrent login): every issue deletes the member's existing
-  refresh tokens before saving the new one, so another device is signed out at its next refresh
-  (its access token stays valid up to 1h). Refresh tokens are stored as SHA-256 hashes only,
+  refresh tokens before saving the new one.
+- Each login is a session (`refresh_token.session_id` = refresh `jti` = access `sid` claim).
+  `JwtAuthenticationFilter` accepts an access token only while its session row exists
+  (`SessionValidator`, one indexed lookup per request), so deleting refresh tokens (sign-out,
+  login on another device, withdrawal) also invalidates the paired access tokens immediately.
+  Refresh tokens are stored as SHA-256 hashes only,
   rotated on reissue (atomic delete); a token that is no longer stored is just rejected (no
   revoke-all, which would sign out the device that just logged in). Expired rows are purged
   daily by `RefreshTokenCleanupScheduler`.

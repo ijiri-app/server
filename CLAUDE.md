@@ -4,31 +4,33 @@ Spring Boot 3.5 / Java 21 / Gradle / PostgreSQL / Spring Data JPA / Spring Secur
 Members sign up with email + password (SMTP email verification) or sign in with Kakao/Google
 SDK tokens, which the server verifies before issuing its own JWTs.
 
-## Workflow (mandatory)
+## Working rules
 
-1. **Output while working = code only.** During work, produce only code creation/modification.
-   Do not narrate the process step by step.
-2. **Review at least once.** After finishing any logic, re-read every changed file at least once
-   and check: correctness, SOLID, conventions below, line length, leftovers
-   (unused imports, dead code, stale TODOs). Fix what the review finds.
-3. **Verify with `./gradlew test`.** Every change must pass both compilation and runtime
-   (context load + tests). Do not report completion until it passes. If it cannot pass
-   (e.g. DB not reachable), say so explicitly with the error output.
-4. **Final report in Korean.** Only after all code is done, explain concisely in Korean
-   what changed and *why* (the development intent). No emoji.
-5. **Commit plan after the report.** After the Korean report, propose commits split by
-   logical unit, listing the files in each commit and its message (see *Commit convention*).
-   Only propose; do not run `git commit` unless explicitly asked.
-6. **Act, don't ask, on rule-conforming fixes.** When something clearly violates this document
-   (wrong package, naming, convention) or is an obvious follow-up of the task, fix it directly
-   and state it ("~하겠습니다") instead of asking "~할까요?". Ask only for genuine product
-   or design decisions that this document does not settle.
-7. **Use tools/skills.** Whenever an available tool or skill fits the task
-   (docs lookup, code review, simplify, security review, etc.), use it.
+- Make the smallest change that fully addresses the request. Follow existing code when it is sound;
+  do not refactor unrelated code.
+- Before changing code, inspect the relevant implementation, tests, configuration, and this document.
+  For cross-cutting changes, inspect all affected areas.
+- After changing code, re-read every changed file at least once and check: correctness, SOLID,
+  the conventions below, line length, leftovers (unused imports, dead code, stale TODOs). Fix what you find.
+- Run the narrowest relevant checks first. Run `./gradlew test` for behavior changes or anything that may
+  affect application startup; do not report completion until it passes. Documentation-only changes need
+  no tests. If a check cannot run or fails for an environmental reason, report the exact error output;
+  never claim it passed.
+- Do not narrate routine steps. Give concise progress updates only when work is substantial.
+- Act, don't ask, on rule-conforming fixes: when something clearly violates this document or is an
+  obvious follow-up of the task, fix it and state it. Ask only when a decision affects product behavior
+  or requirements are genuinely ambiguous.
+- Final report in Korean, concise, no emoji: what changed, why (the intent), and which checks ran.
+- Do not commit unless explicitly asked. For multi-file or multi-concern changes, propose a commit plan
+  after the report (see *Commit convention*).
+- Use available tools and skills (docs lookup, code review, security review, etc.) when they materially help.
+- When you change behavior described in this document (especially *Security notes*), update this document
+  in the same change.
 
 ## Project structure
 
-Keep this layout. New features follow the same shape.
+Keep this layout. New features follow the same shape. Check the source tree before relying on specific
+classes or endpoints; do not create empty packages.
 
 ```
 ijiri.ijiriserver
@@ -64,8 +66,7 @@ ijiri.ijiriserver
     ├── entity                    BaseTimeEntity
     ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
     │                             CustomErrorController (/error -> BaseResponse)
-    ├── jwt                       JwtProvider, JwtAuthenticationFilter, JwtCookieManager,
-    │                             SessionValidator
+    ├── jwt                       JwtProvider, JwtAuthenticationFilter, JwtCookieManager, SessionValidator
     ├── ratelimit                 RateLimiter (in-memory fixed window)
     ├── response                  BaseResponse
     ├── security                  401/403 handlers returning BaseResponse
@@ -74,213 +75,166 @@ ijiri.ijiriserver
 
 Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`).
 Tests: `src/test/resources/application-test.yaml` (H2 in PostgreSQL mode + dummy secrets), so
-`./gradlew test` needs neither a database nor `.env`. `@SpringBootTest` classes use
-`@ActiveProfiles("test")`.
+`./gradlew test` needs neither a database nor `.env`. `@SpringBootTest` classes use `@ActiveProfiles("test")`.
 
 Package rules:
 - A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
   `dto/request`, `dto/response`, `exception`, and optionally `client`, `scheduler`, `event`.
 - Sub-features of a domain get their own sub-package (e.g. `auth/kakao`, `auth/token`).
-- DTOs are always split into `dto/request` and `dto/response`.
-  Internal transfer objects that are neither go directly in `dto`.
+- DTOs are split into `dto/request` and `dto/response`. Internal transfer objects that are neither go in `dto`.
 - Service interfaces live in `service`; implementations live in `service/impl`.
 - `global` contains only cross-cutting infrastructure, never business logic.
 
 ## Design principles
 
-### SOLID
-- **SRP**: one reason to change per class. External API calls go in `client`,
-  orchestration in `service`, HTTP mapping in `controller`.
-- **OCP**: add a new social provider (e.g. Apple) by adding a sub-package with a
-  `SocialTokenVerifier` (returns `MemberRegisterCommand`; and `SocialUnlinkClient` if needed)
-  implementation plus a `Provider` enum value; `OAuthService` picks it up automatically.
-  Do not modify existing providers.
-- **Cross-domain cleanup** goes through member events; `member` never calls other domains'
-  services (no package cycles).
-  - `MemberWithdrawnEvent` (soft delete moment): things that must happen immediately
-    (revoke tokens, social unlink, hide posts). External API calls listen with
-    `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold a DB connection;
-    they catch and log failures, and anything that must eventually succeed is retried from a
-    `MemberPurgedEvent` listener (e.g. Kakao unlink).
-  - `MemberPurgedEvent` (row hard-deleted after 30 days): delete the member's data, including
-    uploaded files in storage. Listeners must be idempotent (a failure rolls back and retries).
-- **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
-- **ISP**: applied pragmatically, not mechanically. See *Service layer* — do not split a
-  service into per-method interfaces just to satisfy ISP.
+- **SRP**: external API calls in `client`, orchestration in `service`, HTTP mapping in `controller`.
+- **OCP**: add a social provider (e.g. Apple) with a new sub-package containing a `SocialTokenVerifier`
+  (returns `MemberRegisterCommand`; plus `SocialUnlinkClient` if needed) and a `Provider` enum value;
+  `OAuthService` picks it up automatically. Do not modify existing providers.
+- **Cross-domain cleanup** goes through member events; `member` never calls other domains' services
+  (no package cycles).
+  - `MemberWithdrawnEvent` (soft delete): immediate actions (revoke tokens, social unlink, hide posts).
+    External API calls listen with `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold
+    a DB connection; they catch and log failures, and anything that must eventually succeed is retried
+    from a `MemberPurgedEvent` listener (e.g. Kakao unlink).
+  - `MemberPurgedEvent` (hard delete after 30 days): delete the member's data, including stored files.
+    Listeners must be idempotent (a failure rolls back and retries).
+- **LSP**: implementations honor the interface contract (same exceptions, no surprises).
 - **DIP**: controllers and other services depend on interfaces, never on `*Impl`.
 
-## Service layer
+### Service layer
 
-- Default shape: one `XxxService` interface + one `XxxServiceImpl` per domain / feature area
-  (e.g. `MemberService`, `TokenService`, `InterestCarService`, `OAuthService`).
-- Do not split simple CRUD into per-method use-case interfaces (`CreatePostUseCase`,
-  `UpdatePostUseCase`, ...). Create such interfaces only when there is an explicit
-  architectural need.
-- Do not split interfaces just to "apply" SOLID/ISP. This is a layered (3-tier) architecture:
-  a controller depends on a single service, so use-case splitting adds files without giving
-  hexagonal-style boundaries.
-- Introduce an abstraction only when multiple implementations actually exist or a client
-  genuinely needs an isolated dependency (e.g. `SocialTokenVerifier` with Kakao/Google
-  implementations).
+- Default shape: one `XxxService` interface + one `XxxServiceImpl` per domain / feature area.
+- Do not split simple CRUD into per-method use-case interfaces (`CreatePostUseCase`, ...) or split
+  interfaces just to "apply" ISP. This is a layered architecture; a controller depends on a single service.
+- Introduce an abstraction only when multiple implementations exist or a client genuinely needs an
+  isolated dependency (e.g. `SocialTokenVerifier`).
 
 ## Coding conventions
 
 ### Naming
-- Service interface: `XxxService`, one per domain / feature area (`MemberService`).
-  Implementation: `XxxServiceImpl` in `service/impl`.
-- Domain event: past-tense `XxxEvent` record in `event` (`MemberWithdrawnEvent`).
-- Controller: `XxxController` named after the feature (`AuthController`, `OAuthController`,
-  `EmailVerificationController`, `TokenController`). Providers have no controllers; they only
-  plug a `client` into `OAuthService`.
-- External API / infrastructure client: `XxxOAuthClient` or `XxxClient` in `client`
-  (`KakaoOAuthClient`, `KakaoUnlinkClient`, `VerificationMailClient`).
+- Service: `XxxService` / `XxxServiceImpl`. Controller: `XxxController` named after the feature.
+  Providers have no controllers; they only plug a `client` into `OAuthService`.
+- Client: `XxxOAuthClient` or `XxxClient` in `client`.
+- Domain event: past-tense `XxxEvent` record in `event`.
 - DTO: Java `record`. Requests are `XxxRequest` per endpoint. Responses are **one per domain**
   (`AuthResponse`, `MemberResponse`, `InterestCarResponse`) with static factories per use
-  (`AuthResponse.tokens(...)`, `AuthResponse.message(...)`) and `@JsonInclude(NON_NULL)` when
-  fields are optional. Do not create a new response class per API.
+  (`AuthResponse.tokens(...)`, `AuthResponse.message(...)`) and `@JsonInclude(NON_NULL)` when fields are
+  optional. Do not create a response class per API.
 - Status code enum per domain: `XxxStatusCode implements StatusCode`.
-- Tables: snake_case singular (`member`, `refresh_token`). Unique/index names:
-  `uk_<table>_<columns>`, `idx_<table>_<columns>`, declared in `@Table(uniqueConstraints/indexes)`
-  and in the migration with the same name. Never use `@Column(unique = true)` (auto-generated name).
+- Auth naming: `signin` / `signout` / `signup`, never `login` / `logout`.
 
 ### Java style
-- Max line length **120**. Break long lines: method chains one call per line,
-  long parameter lists one per line, aligned with 8-space continuation indent.
-- When an argument list or annotation is broken across lines, the closing `)` goes on its
-  own line, aligned with the line that opened it. Calls/annotations that fit on one line
-  stay on one line.
+- Max line length 120. 4-space indentation, no tabs, no wildcard imports, no unused imports.
+- Break long lines: method chains one call per line, long parameter lists one per line, 8-space
+  continuation indent. When an argument list or annotation is broken, the closing `)` goes on its own line,
+  aligned with the opening line. Anything that fits on one line stays on one line.
   ```java
   return new AuthResponse(
           tokens.accessToken(),
           tokens.refreshToken()
   );
-
-  @Operation(
-          summary = "...",
-          description = "..."
-  )
   ```
-- 4-space indentation, no tabs. No wildcard imports. Remove unused imports.
-- Constructor injection only, with `private final` fields. Use Lombok `@RequiredArgsConstructor`
-  unless the constructor needs `@Value` parameters or builds a field from its arguments
-  (e.g. `Map<Provider, SocialTokenVerifier>`, a configured `RestClient`); then write it by hand.
-- Entities: **every persisted field except the primary key (`@Id`) MUST have `@Column`** with
-  `name` always set, plus only the constraints that differ from JPA defaults
-  (`nullable = false`, `length` when not 255, `updatable = false`).
-  Never write JPA default values: `nullable = true`, `length = 255`, `unique = false`,
-  `updatable = true`, `insertable = true`.
+- Constructor injection with `private final` fields via `@RequiredArgsConstructor`, unless the
+  constructor needs `@Value` parameters or builds a field from its arguments; then write it by hand.
+- Constants: `private static final` UPPER_SNAKE_CASE, only when they add meaning.
+- Current time: always `LocalDateTime.now(clock)` with the injected `Clock`, never `now()`.
+- External HTTP clients use the `externalApiRequestFactory` bean, never `RestClient.create()`.
+- Services never take `HttpServletRequest/Response`; cookies, IPs and headers are handled in controllers.
+- Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls, method-level
+  `@Transactional` on writes.
+- Comments only where intent is not obvious (why, not what). Korean is allowed.
+
+### Entities and schema
+- Every persisted field except `@Id` has `@Column` with `name` set, plus only non-default constraints
+  (`nullable = false`, `length` when not 255, `updatable = false`). Never write JPA defaults.
   ```java
   @Column(name = "email", nullable = false)
   @Column(name = "profile_image_url", length = 500)
   ```
-- Entities use exactly this Lombok set: `@Getter`,
-  `@NoArgsConstructor(access = AccessLevel.PROTECTED)`,
-  `@AllArgsConstructor(access = AccessLevel.PRIVATE)`, class-level `@Builder`.
-  When creation needs logic (e.g. hashing), add a static factory that uses the builder
-  (`RefreshToken.of(...)`). Extend `BaseTimeEntity` when timestamps are needed; store enums
-  with `@Enumerated(EnumType.STRING)`.
-- Schema changes: add a new Flyway migration `V{n+1}__description.sql` in the same change as the
-  entity change. Never edit a migration that has been applied. `ddl-auto` is `validate` in every
-  profile. Do not add CHECK constraints for enum columns (adding an enum value would need a migration).
-- Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls,
-  method-level `@Transactional` on writes.
-- Constants: `private static final` UPPER_SNAKE_CASE.
-- Current time: always `LocalDateTime.now(clock)` with the injected `Clock`, never `now()`.
-- External HTTP clients use the `externalApiRequestFactory` bean (timeouts), never `RestClient.create()`.
-- Services never take `HttpServletRequest/Response`; cookies, IPs and headers are handled in controllers.
-- Comments: only where intent is not obvious from code (why, not what). Korean is allowed.
+- Lombok set, exactly: `@Getter`, `@NoArgsConstructor(access = AccessLevel.PROTECTED)`,
+  `@AllArgsConstructor(access = AccessLevel.PRIVATE)`, class-level `@Builder`. When creation needs logic
+  (e.g. hashing), add a static factory using the builder (`RefreshToken.of(...)`).
+- Extend `BaseTimeEntity` when timestamps are needed; enums use `@Enumerated(EnumType.STRING)`.
+- Tables and columns: singular snake_case (`member`, `refresh_token`). Constraints: `uk_<table>_<columns>`,
+  `idx_<table>_<columns>`, declared in `@Table(uniqueConstraints/indexes)` and in the migration with the
+  same name. Never use `@Column(unique = true)`.
+- Schema changes: add Flyway migration `V{n+1}__description.sql` in the same change as the entity.
+  Never edit an applied migration. `ddl-auto` is `validate` in every profile. No CHECK constraints on
+  enum columns.
 
 ### API
-- **Every API response — success AND error — MUST be returned through `BaseResponse<T>`.**
-  - Success: `BaseResponse.ok(data)` or `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, data)`
-    — `data` is always a response DTO, never `null`.
-  - Error: `BaseResponse.onFailure(statusCode[, detail])`, produced only by
-    `GlobalExceptionHandler` and the Spring Security handlers in `global/security`.
-  - Never return raw DTOs, entities, `ResponseEntity<Dto>`, `void`, or Spring's default
-    error body from any endpoint. Only the error handlers (`GlobalExceptionHandler`,
-    `CustomErrorController`) return `ResponseEntity<BaseResponse<?>>` to set the HTTP status.
-- Every service method called by a controller returns its domain's response DTO, never `void`
-  or a primitive/wrapper. When there is nothing else to return, return a message
-  (e.g. `AuthResponse.message(...)`). Never return entities from controllers. Internal service-to-service
-  methods (e.g. `existsEmailMember`) may return primitives or `void`.
-- Status code format: `<DOMAIN><HTTP status>[<seq>]`, e.g. `AUTH200`, `AUTH4011`, `MEMBER404`.
-- Validate request bodies with `@Valid` + Bean Validation on the request record.
+- Every response, success and error, goes through `BaseResponse<T>`.
+  - Success: `BaseResponse.ok(data)` or `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, data)`;
+    `data` is always a response DTO, never `null`.
+  - Error: `BaseResponse.onFailure(statusCode[, detail])`, produced only by `GlobalExceptionHandler` and
+    the handlers in `global/security`. Only these (and `CustomErrorController`) return
+    `ResponseEntity<BaseResponse<?>>`.
+  - Never return raw DTOs, entities, `ResponseEntity<Dto>`, `void`, or Spring's default error body.
+- Controller-facing service methods return the domain's response DTO (use `XxxResponse.message(...)`
+  when there is nothing else). Internal service-to-service methods may return primitives or `void`.
+- Status codes: `<DOMAIN><HTTP status>[<seq>]`, e.g. `AUTH200`, `AUTH4011`, `MEMBER404`.
 - Business errors: `throw new CustomException(XxxStatusCode.SOME_ERROR)`.
-  Never return error responses manually from controllers; `GlobalExceptionHandler` handles them.
+- Validate request bodies with `@Valid` + Bean Validation on the request record.
 - Authenticated member id: `@Parameter(hidden = true) @AuthenticationPrincipal String memberId`.
-- Document endpoints with `@Tag` and `@Operation`. `@Operation` is always written multi-line,
-  one attribute (`summary`, `description`) per line, closing `)` on its own line.
-- Public endpoints use `@SecurityRequirements` (empty) and must be permitted in `SecurityConfig`.
+- Document with `@Tag` and `@Operation` (multi-line, one attribute per line). Public endpoints use empty
+  `@SecurityRequirements` and must be permitted in `SecurityConfig`. Apply security documentation at the
+  narrowest accurate scope when endpoints in one controller differ.
 
 ## Security notes
+
+These are invariants. Do not change them without being asked, and keep this section in sync with the code.
+
 - JWT subject = member id. Access token 1h, refresh token 28d (`application.yaml`).
-- Tokens are returned in the body AND as `accessToken` / `refreshToken` cookies
-  (HttpOnly, Secure, SameSite=None) via `JwtCookieManager`. Access token is read from the
-  `Authorization` header first, then the cookie. Refresh reads the body, then the cookie.
-- CSRF: cookie tokens are ignored when the request has an `Origin` header that is not in
-  `cors.allowed-origins`.
-- Sign-out is an authenticated endpoint (`@AuthenticationPrincipal`): expire both cookies and
-  delete all of the member's refresh tokens. Withdrawal also expires the cookies.
-- One session per account (no concurrent login): every issue deletes the member's existing
-  refresh tokens before saving the new one.
-- Each login is a session (`refresh_token.session_id` = refresh `jti` = access `sid` claim).
-  `JwtAuthenticationFilter` accepts an access token only while its session row exists
-  (`SessionValidator`, one indexed lookup per request), so deleting refresh tokens (sign-out,
-  login on another device, withdrawal) also invalidates the paired access tokens immediately.
-  Refresh tokens are stored as SHA-256 hashes only,
-  rotated on reissue (atomic delete); a token that is no longer stored is just rejected (no
-  revoke-all, which would sign out the device that just logged in). Expired rows are purged
-  daily by `RefreshTokenCleanupScheduler`.
-- Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or
-  re-register with the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn
-  members (refresh of a withdrawn member's token is `AUTH4012`, not 404). `MemberPurgeScheduler`
-  hard-deletes them after 30 days, one transaction per member. Kakao unlink runs after the
-  withdrawal commit; if it fails it is retried before the purge (unlinking twice is harmless).
-- Member identity = `provider + provider_member_id` (unique constraint). Email members use
-  `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
-- Email sign-up is 3 steps: send code -> verify code -> sign up. Code: 6 digits bound to that
-  email, valid 5 min, 5 attempts, 60 s resend cooldown (resend resets verification;
-  the row is locked so concurrent resends cannot send two codes).
-  Verifying marks the row verified and gives 30 min to sign up; sign-up atomically consumes
-  the verified row (one verification = one sign-up), creates the member and signs in
-  (tokens in body + cookies, `isNewMember = true`). For an already registered email the
-  send API answers identically and only a notice mail is sent (no account enumeration).
-- Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP,
-  verification-code 10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
-- Sign-up fields: email, password, nickname 2-12 chars. Required consents are gated by the
-  client only (not sent or stored).
-- Passwords: 8-20 chars, at least one letter and one digit,
-  and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
+- Tokens are returned in the body and as `accessToken` / `refreshToken` cookies (HttpOnly, Secure,
+  SameSite=None) via `JwtCookieManager`. Access token: `Authorization` header first, then cookie.
+  Refresh: body first, then cookie.
+- CSRF: cookie tokens are ignored when the request's `Origin` is not in `cors.allowed-origins`.
+- One session per account: every issue deletes the member's existing refresh tokens before saving the new one.
+- Session model: `refresh_token.session_id` = refresh `jti` = access `sid` claim. `JwtAuthenticationFilter`
+  accepts an access token only while its session row exists (`SessionValidator`), so deleting refresh tokens
+  (sign-out, login elsewhere, withdrawal) invalidates paired access tokens immediately.
+- Refresh tokens are stored as SHA-256 hashes only and rotated on reissue (atomic delete). A token no longer
+  stored is simply rejected (no revoke-all). Expired rows are purged daily by `RefreshTokenCleanupScheduler`.
+- Sign-out is authenticated: expire both cookies and delete all the member's refresh tokens.
+  Withdrawal also expires the cookies.
+- Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or re-register with
+  the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn members (refresh is `AUTH4012`,
+  not 404). `MemberPurgeScheduler` hard-deletes after 30 days, one transaction per member. Kakao unlink runs
+  after the withdrawal commit and is retried before the purge if it fails.
+- Member identity = `provider + provider_member_id` (unique). Email members use `provider = EMAIL`,
+  `provider_member_id = email`; passwords are BCrypt hashes.
+- Email sign-up: send code -> verify code -> sign up. 6-digit code bound to the email, valid 5 min,
+  5 attempts, 60 s resend cooldown (resend resets verification; the row is locked against concurrent resends).
+  Verification gives 30 min to sign up; sign-up atomically consumes the verified row, creates the member and
+  signs in (`isNewMember = true`). For an already registered email the send API answers identically and only
+  a notice mail is sent (no account enumeration).
+- Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP; verification-code
+  10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
+- Sign-up fields: email, password, nickname 2-12 chars. Required consents are client-gated only.
+- Passwords: 8-20 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
-  Social nicknames follow the same 2-12 chars rule: longer ones are cut to 12, missing or shorter
-  ones get a default (`이지리오너` + 4 digits).
-- Kakao API: only 400/401 mean an invalid provider token (`AUTH4011`); other errors (e.g. 429)
-  are `SOCIAL_SERVER_ERROR` (`AUTH502`).
-- Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
-- Secrets come from `.env` (never commit it). Never log tokens or secrets.
-- Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod`
-  (set `SPRING_PROFILES_ACTIVE=prod`; every secret required, forwarded headers for client IP)
-  and `test` (H2, used by tests only). All profiles run Flyway and `ddl-auto: validate`.
+  Social nicknames: longer than 12 are cut to 12; missing or shorter than 2 get `이지리오너` + 4 digits.
+- Kakao API: only 400/401 mean an invalid provider token (`AUTH4011`); other errors are `AUTH502`.
+- Secrets come from `.env` (never commit it). Never log passwords, tokens, or secrets.
+- Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
+  every secret required, no fallbacks, forwarded headers for client IP), `test` (H2, tests only).
+  All profiles run Flyway and `ddl-auto: validate`.
 
 ## Commit convention
 
-- **Commit messages MUST always be written in English** (even though reports are in Korean).
-- Format: `<type>: <summary>` — imperative mood, no scope (never `type(scope):`),
-  no trailing period, max 72 chars.
+- Commit messages always in English.
+- Format: `<type>: <summary>`, imperative mood, no scope, no trailing period, max 72 chars.
 - Types: `feat`, `fix`, `refactor`, `chore` (build/config), `docs`, `test`, `style`.
-- One commit = one logical change. Group files by that change, not by file type.
-- Commit plan format in the report: ready-to-paste git commands, one `git add` + `git commit`
-  pair per commit, in an order where every commit compiles. Use `git add -A <paths>` so
-  deletions and renames are included. Each command on a single line (never `\` line
-  continuations; pasted trailing spaces break them), one code block per command.
+- One commit = one logical change. Group files by change, not by file type.
+- Commit plan format: ready-to-paste commands, one `git add -A <paths>` + `git commit` pair per commit,
+  ordered so every commit compiles. Each command on a single line (no `\` continuations).
   ```bash
   git add -A src/main/java/ijiri/ijiriserver/domain/auth/token
   git commit -m "refactor: move RefreshTokenServiceImpl to service/impl"
-
-  git add CLAUDE.md
-  git commit -m "docs: add commit convention to CLAUDE.md"
   ```
 
 ## Commands
-- Build & test: `./gradlew test`
+
+- Build & test: `./gradlew test` (no DB or `.env` needed)
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)

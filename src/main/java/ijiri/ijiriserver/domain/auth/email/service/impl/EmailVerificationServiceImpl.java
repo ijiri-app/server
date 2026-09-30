@@ -23,12 +23,13 @@ import java.time.LocalDateTime;
 @RequiredArgsConstructor
 public class EmailVerificationServiceImpl implements EmailVerificationService {
 
-    private static final long CODE_VALID_MINUTES = 10;
+    private static final long CODE_VALID_MINUTES = 5;
+    // 코드 확인 후 비밀번호/닉네임 입력까지 허용하는 시간
+    private static final long SIGNUP_WINDOW_MINUTES = 30;
     private static final long RESEND_COOLDOWN_SECONDS = 60;
     private static final int MAX_ATTEMPTS = 5;
     private static final int CODE_LENGTH = 6;
-    // 영문 대문자 + 숫자로 생성하고, 입력은 대소문자 구분 없이 비교한다
-    private static final String CODE_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    private static final String CODE_CHARACTERS = "0123456789";
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String REGISTERED_NOTICE_KEY_PREFIX = "verification:registered:";
 
@@ -75,7 +76,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다
     @Override
     @Transactional(noRollbackFor = CustomException.class)
-    public void verifyAndConsume(String email, String code) {
+    public AuthResponse verifyCode(String email, String code) {
         LocalDateTime now = LocalDateTime.now(clock);
         // 이 이메일로 발송된 코드가 없으면 다른 이메일의 코드를 넣은 경우도 포함해 일치하지 않는 것으로 본다
         EmailVerification verification = emailVerificationRepository.findByEmail(email)
@@ -90,7 +91,16 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         if (!verification.matches(code)) {
             throw new CustomException(AuthStatusCode.INVALID_VERIFICATION_CODE);
         }
-        emailVerificationRepository.delete(verification);
+        verification.markVerified(now, now.plusMinutes(SIGNUP_WINDOW_MINUTES));
+        return AuthResponse.message(AuthStatusCode.EMAIL_VERIFIED.getMessage());
+    }
+
+    @Override
+    @Transactional
+    public void consumeVerified(String email) {
+        if (emailVerificationRepository.deleteVerified(email, LocalDateTime.now(clock)) == 0) {
+            throw new CustomException(AuthStatusCode.EMAIL_NOT_VERIFIED);
+        }
     }
 
     // 미가입 이메일의 재발송 대기와 같은 주기·같은 에러를 적용한다

@@ -21,10 +21,6 @@ public record AuthResponse(
         return new AuthResponse(accessToken, refreshToken, accessTokenExpiresIn, null, null, null, null);
     }
 
-    public static AuthResponse signup(MemberResponse member) {
-        return new AuthResponse(null, null, null, null, member, null, null);
-    }
-
     public static AuthResponse verificationCodeSent(long verificationCodeExpiresIn) {
         return new AuthResponse(null, null, null, null, null, verificationCodeExpiresIn, null);
     }

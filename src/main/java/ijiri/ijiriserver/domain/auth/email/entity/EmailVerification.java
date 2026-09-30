@@ -16,8 +16,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 이메일당 한 줄. 코드 재발송 시 같은 행을 갱신하고,
- * 가입에 성공하면 즉시 삭제해 코드를 한 번만 쓸 수 있게 한다.
+ * 이메일당 한 줄. 코드 재발송 시 같은 행을 갱신한다.
+ * 코드가 맞으면 인증 완료(verifiedAt)로 바꾸고 만료 시각을 가입 가능 기한으로 늘린다.
+ * 가입에 성공하면 삭제해 한 번의 인증으로 한 번만 가입할 수 있게 한다.
  */
 @Entity
 @Getter
@@ -40,11 +41,16 @@ public class EmailVerification extends BaseTimeEntity {
     @Column(name = "sent_at", nullable = false)
     private LocalDateTime sentAt;
 
+    // 코드 확인 전에는 코드 만료 시각, 확인 후에는 가입 가능 기한
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
     @Column(name = "attempt_count", nullable = false)
     private int attemptCount;
+
+    // null 이면 아직 코드를 확인하지 않은 상태
+    @Column(name = "verified_at")
+    private LocalDateTime verifiedAt;
 
     public static EmailVerification of(String email, String code, LocalDateTime now, LocalDateTime expiresAt) {
         return EmailVerification.builder()
@@ -60,6 +66,16 @@ public class EmailVerification extends BaseTimeEntity {
         this.sentAt = now;
         this.expiresAt = expiresAt;
         this.attemptCount = 0;
+        this.verifiedAt = null;
+    }
+
+    public void markVerified(LocalDateTime now, LocalDateTime signupDeadline) {
+        this.verifiedAt = now;
+        this.expiresAt = signupDeadline;
+    }
+
+    public boolean isVerified() {
+        return verifiedAt != null;
     }
 
     public boolean canResend(LocalDateTime now, long cooldownSeconds) {
@@ -77,6 +93,6 @@ public class EmailVerification extends BaseTimeEntity {
     // 틀린 시도도 횟수에 포함되도록 비교 전에 증가시킨다
     public boolean matches(String code) {
         attemptCount++;
-        return this.code.equalsIgnoreCase(code);
+        return this.code.equals(code);
     }
 }

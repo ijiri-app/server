@@ -36,18 +36,18 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
 
-    // 틀린 인증 시도 횟수가 가입 실패와 함께 롤백되지 않도록 전체를 하나의 트랜잭션으로 묶지 않는다.
-    // 코드 확인을 먼저 해 이메일 소유가 증명된 뒤에만 중복 여부를 알려준다.
-    // 가입된 이메일로는 인증 코드가 발송되지 않으므로 중복 에러는 동시 가입 경합에서만 난다
+    // 인증 완료 기록을 먼저 소모해 이메일 소유가 증명된 뒤에만 가입하고, 중복 여부도 그때만 알려준다.
+    // 가입된 이메일로는 인증 코드가 발송되지 않으므로 중복 에러는 동시 가입 경합에서만 난다.
+    // 가입 직후 바로 서비스를 쓰도록(디자인: "구경하러 가기") 토큰까지 발급한다
     @Override
     public AuthResponse signup(SignupRequest request) {
-        emailVerificationService.verifyAndConsume(request.email(), request.verificationCode());
+        emailVerificationService.consumeVerified(request.email());
         Member member = memberService.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),
                 passwordEncoder.encode(request.password())
         ));
-        return AuthResponse.signup(MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(true, MemberResponse.from(member));
     }
 
     // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답한다.

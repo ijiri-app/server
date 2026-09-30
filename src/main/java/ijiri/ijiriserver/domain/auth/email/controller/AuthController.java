@@ -42,12 +42,18 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 회원가입",
-            description = "닉네임, 이메일, 비밀번호, 인증 코드로 가입. 토큰은 발급하지 않는다"
+            description = "인증 코드 확인을 마친 이메일 + 비밀번호, 닉네임, 필수 동의로 가입. "
+                    + "가입과 동시에 로그인되어 토큰을 body 와 쿠키로 발급한다"
     )
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/signup")
-    public BaseResponse<AuthResponse> signup(@Valid @RequestBody SignupRequest request) {
-        return BaseResponse.of(AuthStatusCode.SIGNUP_SUCCESS, authService.signup(request));
+    public BaseResponse<AuthResponse> signup(
+            @Valid @RequestBody SignupRequest request,
+            HttpServletResponse httpResponse
+    ) {
+        AuthResponse response = authService.signup(request);
+        jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
+        return BaseResponse.of(AuthStatusCode.SIGNUP_SUCCESS, response);
     }
 
     @Operation(

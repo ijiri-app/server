@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.controller;
 
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
+import ijiri.ijiriserver.domain.auth.email.dto.request.VerificationCodeConfirmRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.VerificationCodeSendRequest;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -36,8 +37,7 @@ public class EmailVerificationController {
 
     @Operation(
             summary = "인증 코드 발송",
-            description = "영문 + 숫자 6자리 코드를 발송. 10분간 유효하며 회원가입 요청에 함께 보낸다. "
-                    + "재발송은 60초 후, IP 당 시간당 10회"
+            description = "숫자 6자리 코드를 발송. 5분간 유효. 재발송은 60초 후, IP 당 시간당 10회"
     )
     @PostMapping("/verification-code")
     public BaseResponse<AuthResponse> sendCode(
@@ -48,6 +48,18 @@ public class EmailVerificationController {
         return BaseResponse.of(
                 AuthStatusCode.VERIFICATION_CODE_SENT,
                 emailVerificationService.sendCode(request.email())
+        );
+    }
+
+    @Operation(
+            summary = "인증 코드 확인",
+            description = "코드가 맞으면 이메일 인증 완료. 이후 30분 안에 회원가입해야 한다. 코드당 5회까지 시도"
+    )
+    @PostMapping("/verification-code/verify")
+    public BaseResponse<AuthResponse> verifyCode(@Valid @RequestBody VerificationCodeConfirmRequest request) {
+        return BaseResponse.of(
+                AuthStatusCode.EMAIL_VERIFIED,
+                emailVerificationService.verifyCode(request.email(), request.code())
         );
     }
 }

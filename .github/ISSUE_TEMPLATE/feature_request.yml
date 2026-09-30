@@ -1,0 +1,32 @@
+name: 기능 요청
+description: 새 기능이나 개선을 제안합니다
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: background
+    attributes:
+      label: 배경
+      description: 왜 필요한지, 어떤 문제를 해결하는지 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 제안 내용
+      description: 추가/변경할 API, 동작, 데이터를 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: tasks
+    attributes:
+      label: 작업 목록
+      placeholder: |
+        - [ ] API 설계
+        - [ ] 구현
+        - [ ] 테스트
+  - type: textarea
+    id: notes
+    attributes:
+      label: 참고 사항
+      description: 관련 이슈, 디자인, 문서 링크 등

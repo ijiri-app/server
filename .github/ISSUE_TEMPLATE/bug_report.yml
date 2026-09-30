@@ -1,0 +1,45 @@
+name: 버그 리포트
+description: 의도와 다르게 동작하는 문제를 제보합니다
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 문제 설명
+      description: 어떤 문제가 있는지 간단히 적어 주세요.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 재현 방법
+      description: 요청(API 경로, body)과 순서를 적어 주세요.
+      placeholder: |
+        1. POST /auth/signin 호출
+        2. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대 동작
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 응답 code/message, 에러 로그를 붙여 주세요. 토큰·비밀번호·키는 반드시 가려 주세요.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 환경
+      options:
+        - local
+        - prod
+    validations:
+      required: true

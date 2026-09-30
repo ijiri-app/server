@@ -7,6 +7,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 /**
@@ -18,11 +19,12 @@ import java.time.LocalDateTime;
 public class EmailVerificationCleanupScheduler {
 
     private final EmailVerificationRepository emailVerificationRepository;
+    private final Clock clock;
 
     @Transactional
     @Scheduled(cron = "0 10 4 * * *", zone = "Asia/Seoul")
     public void deleteExpired() {
-        int deleted = emailVerificationRepository.deleteAllExpired(LocalDateTime.now());
+        int deleted = emailVerificationRepository.deleteAllExpired(LocalDateTime.now(clock));
         log.info("Deleted {} expired email verifications", deleted);
     }
 }

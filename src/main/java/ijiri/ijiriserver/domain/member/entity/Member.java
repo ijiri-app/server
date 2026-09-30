@@ -31,7 +31,8 @@ public class Member extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "email", nullable = false)
+    // 소셜 회원은 이메일 제공에 동의하지 않았거나 미인증이면 null
+    @Column(name = "email")
     private String email;
 
     @Column(name = "nickname", nullable = false, length = 100)

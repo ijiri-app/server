@@ -21,7 +21,9 @@ public enum AuthStatusCode implements StatusCode {
     INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH4012", "유효하지 않은 리프레시 토큰입니다."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH4013", "이메일 또는 비밀번호가 올바르지 않습니다."),
     VERIFICATION_ATTEMPTS_EXCEEDED(
-            HttpStatus.TOO_MANY_REQUESTS, "AUTH4291", "인증 시도 횟수를 초과했습니다. 코드를 다시 요청해 주세요."
+            HttpStatus.TOO_MANY_REQUESTS,
+            "AUTH4291",
+            "인증 시도 횟수를 초과했습니다. 코드를 다시 요청해 주세요."
     ),
     VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "AUTH4292", "잠시 후 다시 요청해 주세요."),
     SOCIAL_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "AUTH502", "소셜 로그인 서버와 통신에 실패했습니다."),

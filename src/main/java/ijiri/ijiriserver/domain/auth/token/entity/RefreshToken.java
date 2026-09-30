@@ -21,6 +21,7 @@ import java.util.HexFormat;
 
 /**
  * 기기(로그인)마다 한 줄. 재발급 시 기존 토큰은 지우고 새로 저장한다(rotation).
+ * 회원당 최대 개수를 넘으면 오래된 것부터 지운다.
  * DB 유출 시 바로 쓸 수 없도록 원문 대신 SHA-256 해시만 저장한다.
  */
 @Entity
@@ -28,7 +29,10 @@ import java.util.HexFormat;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @AllArgsConstructor(access = AccessLevel.PRIVATE)
 @Builder
-@Table(name = "refresh_token", indexes = @Index(name = "idx_refresh_token_member_id", columnList = "member_id"))
+@Table(
+        name = "refresh_token",
+        indexes = @Index(name = "idx_refresh_token_member_id", columnList = "member_id")
+)
 public class RefreshToken {
 
     @Id
@@ -60,9 +64,5 @@ public class RefreshToken {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    public boolean isExpired() {
-        return expiresAt.isBefore(LocalDateTime.now());
     }
 }

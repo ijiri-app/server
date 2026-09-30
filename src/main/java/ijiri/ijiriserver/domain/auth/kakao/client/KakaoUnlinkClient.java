@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -26,11 +27,20 @@ public class KakaoUnlinkClient implements SocialUnlinkClient {
     // 이미 연결이 끊긴 사용자 (카카오 계정 설정에서 직접 끊은 경우 등)
     private static final int NOT_REGISTERED_USER = -101;
 
-    private final RestClient restClient = RestClient.create("https://kapi.kakao.com");
+    private static final String BASE_URL = "https://kapi.kakao.com";
+
+    private final RestClient restClient;
     private final String adminKey;
 
-    public KakaoUnlinkClient(@Value("${oauth.kakao.admin-key}") String adminKey) {
+    public KakaoUnlinkClient(
+            @Value("${oauth.kakao.admin-key}") String adminKey,
+            ClientHttpRequestFactory externalApiRequestFactory
+    ) {
         this.adminKey = adminKey;
+        this.restClient = RestClient.builder()
+                .baseUrl(BASE_URL)
+                .requestFactory(externalApiRequestFactory)
+                .build();
     }
 
     @Override

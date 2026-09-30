@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.domain.auth.common.service;
 
-import ijiri.ijiriserver.domain.member.entity.Provider;
+import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 
 public interface SocialUnlinkService {
 
-    void unlink(Provider provider, String providerMemberId);
+    void unlink(MemberWithdrawnEvent event);
 }

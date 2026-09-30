@@ -1,6 +1,5 @@
 package ijiri.ijiriserver.domain.member.service.impl;
 
-import ijiri.ijiriserver.domain.auth.common.service.SocialUnlinkService;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
@@ -15,6 +14,7 @@ import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -30,7 +30,6 @@ public class MemberServiceImpl implements MemberService {
     private static final String DEFAULT_NICKNAME_PREFIX = "이지리오너";
 
     private final MemberRepository memberRepository;
-    private final SocialUnlinkService socialUnlinkService;
     private final ApplicationEventPublisher eventPublisher;
 
     @Override
@@ -52,22 +51,27 @@ public class MemberServiceImpl implements MemberService {
                 .orElseGet(() -> new MemberRegisterResult(memberRepository.save(toMember(command)), true));
     }
 
-    // 이메일 회원은 provider = EMAIL, providerMemberId = email 로 저장해 (provider, providerMemberId) 유니크로 중복을 막는다
+    // 이메일 회원은 provider = EMAIL, providerMemberId = email 로 저장해
+    // (provider, providerMemberId) 유니크로 중복을 막는다. 동시 가입 경합도 유니크 위반으로 걸러진다
     @Override
     @Transactional
     public Member signup(MemberSignupCommand command) {
         if (existsEmailMember(command.email())) {
             throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
         }
-        return memberRepository.save(Member.builder()
-                .provider(Provider.EMAIL)
-                .providerMemberId(command.email())
-                .email(command.email())
-                .nickname(command.nickname())
-                .password(command.encodedPassword())
-                .role(Role.USER)
-                .build()
-        );
+        try {
+            return memberRepository.saveAndFlush(Member.builder()
+                    .provider(Provider.EMAIL)
+                    .providerMemberId(command.email())
+                    .email(command.email())
+                    .nickname(command.nickname())
+                    .password(command.encodedPassword())
+                    .role(Role.USER)
+                    .build()
+            );
+        } catch (DataIntegrityViolationException e) {
+            throw new CustomException(MemberStatusCode.DUPLICATE_EMAIL);
+        }
     }
 
     @Override
@@ -80,14 +84,18 @@ public class MemberServiceImpl implements MemberService {
         return memberRepository.existsByProviderAndProviderMemberId(Provider.EMAIL, email);
     }
 
+    // 소셜 연결 끊기는 이벤트의 커밋 직전 단계에서 실행된다. 실패하면 탈퇴 전체가 롤백되어 다시 시도할 수 있고,
+    // 연결 끊기는 이미 끊긴 계정에도 성공 처리되므로 재시도해도 안전하다
     @Override
     @Transactional
     public MemberResponse withdraw(Long memberId) {
         Member member = getById(memberId);
-        eventPublisher.publishEvent(new MemberWithdrawnEvent(memberId));
         memberRepository.delete(member);
-        // 외부 호출은 마지막에: 실패하면 예외로 위 삭제가 전부 롤백되어 다시 탈퇴를 시도할 수 있다
-        socialUnlinkService.unlink(member.getProvider(), member.getProviderMemberId());
+        eventPublisher.publishEvent(new MemberWithdrawnEvent(
+                memberId,
+                member.getProvider(),
+                member.getProviderMemberId()
+        ));
         return MemberResponse.from(member);
     }
 

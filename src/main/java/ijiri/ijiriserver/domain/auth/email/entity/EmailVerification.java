@@ -16,7 +16,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 이메일당 한 줄. 코드 재발송 시 같은 행을 갱신하고, 가입에 성공하면 즉시 삭제해 코드를 한 번만 쓸 수 있게 한다.
+ * 이메일당 한 줄. 코드 재발송 시 같은 행을 갱신하고,
+ * 가입에 성공하면 즉시 삭제해 코드를 한 번만 쓸 수 있게 한다.
  */
 @Entity
 @Getter

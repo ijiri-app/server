@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.member.dto;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 
 /**
- * 소셜 로그인으로 들어온 회원 정보. nickname/profileImageUrl 은 선택 동의라 null 일 수 있다.
+ * 소셜 서버에서 검증 후 꺼낸 회원 정보. email/nickname/profileImageUrl 은 선택 동의라 null 일 수 있다.
  */
 public record MemberRegisterCommand(
         Provider provider,

@@ -3,14 +3,20 @@ package ijiri.ijiriserver.global.exception;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestCookieException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -48,9 +54,27 @@ public class GlobalExceptionHandler {
         return toResponse(CommonStatusCode.INVALID_INPUT, errors);
     }
 
+    // Spring 6.1+ 메서드 파라미터 검증 실패 (@RequestBody 가 아닌 파라미터의 제약)
+    @ExceptionHandler(HandlerMethodValidationException.class)
+    public ResponseEntity<BaseResponse<Map<String, String>>> handleHandlerMethodValidation(
+            HandlerMethodValidationException e
+    ) {
+        Map<String, String> errors = new LinkedHashMap<>();
+        e.getParameterValidationResults().forEach(result -> errors.putIfAbsent(
+                result.getMethodParameter().getParameterName(),
+                result.getResolvableErrors().stream()
+                        .map(MessageSourceResolvable::getDefaultMessage)
+                        .findFirst()
+                        .orElse(null)
+        ));
+        return toResponse(CommonStatusCode.INVALID_INPUT, errors);
+    }
+
     @ExceptionHandler({
             HttpMessageNotReadableException.class,
             MissingServletRequestParameterException.class,
+            MissingRequestHeaderException.class,
+            MissingRequestCookieException.class,
             MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<BaseResponse<Void>> handleBadRequest(Exception e) {
@@ -67,9 +91,21 @@ public class GlobalExceptionHandler {
         return toResponse(CommonStatusCode.METHOD_NOT_ALLOWED);
     }
 
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return toResponse(CommonStatusCode.UNSUPPORTED_MEDIA_TYPE);
+    }
+
     @ExceptionHandler(NoResourceFoundException.class)
     public ResponseEntity<BaseResponse<Void>> handleNoResourceFound(NoResourceFoundException e) {
         return toResponse(CommonStatusCode.NOT_FOUND);
+    }
+
+    // 도메인에서 잡지 못한 unique 제약 충돌 (동시 요청 경합 등)
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<BaseResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException e) {
+        log.warn("Data integrity violation: {}", e.getMostSpecificCause().getMessage());
+        return toResponse(CommonStatusCode.CONFLICT);
     }
 
     @ExceptionHandler(Exception.class)

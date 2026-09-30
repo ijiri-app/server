@@ -30,9 +30,11 @@ public class JwtProvider {
     private final long accessTokenValidityMillis;
     private final long refreshTokenValidityMillis;
 
-    public JwtProvider(@Value("${jwt.secret}") String secret,
-                       @Value("${jwt.access-token-validity-seconds}") long accessTokenValiditySeconds,
-                       @Value("${jwt.refresh-token-validity-seconds}") long refreshTokenValiditySeconds) {
+    public JwtProvider(
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.access-token-validity-seconds}") long accessTokenValiditySeconds,
+            @Value("${jwt.refresh-token-validity-seconds}") long refreshTokenValiditySeconds
+    ) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTokenValidityMillis = accessTokenValiditySeconds * 1000;
         this.refreshTokenValidityMillis = refreshTokenValiditySeconds * 1000;
@@ -94,7 +96,9 @@ public class JwtProvider {
         Claims claims = parse(token);
         String role = claims.get(ROLE_CLAIM, String.class);
         return new UsernamePasswordAuthenticationToken(
-                claims.getSubject(), null, List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role))
+                claims.getSubject(),
+                null,
+                List.of(new SimpleGrantedAuthority(ROLE_PREFIX + role))
         );
     }
 

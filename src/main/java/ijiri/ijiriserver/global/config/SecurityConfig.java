@@ -5,6 +5,7 @@ import ijiri.ijiriserver.global.security.CustomAccessDeniedHandler;
 import ijiri.ijiriserver.global.security.CustomAuthenticationEntryPoint;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -58,8 +59,7 @@ public class SecurityConfig {
                                 "/auth/signup",
                                 "/auth/email/verification-code",
                                 "/auth/signin",
-                                "/auth/refresh",
-                                "/auth/signout"
+                                "/auth/refresh"
                         ).permitAll()
                         .requestMatchers(
                                 "/error"
@@ -72,6 +72,16 @@ public class SecurityConfig {
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
+    }
+
+    // @Component 필터는 Spring Boot 가 서블릿 필터로도 자동 등록하므로, Security 체인에서만 돌도록 끈다
+    @Bean
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtAuthenticationFilterRegistration(
+            JwtAuthenticationFilter filter
+    ) {
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
     }
 
     @Bean

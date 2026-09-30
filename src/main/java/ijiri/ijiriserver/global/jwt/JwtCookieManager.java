@@ -3,7 +3,7 @@ package ijiri.ijiriserver.global.jwt;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
@@ -11,13 +11,14 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 /**
- * access/refresh token 쿠키 발급, 만료, 조회. 토큰은 Authorization 헤더를 먼저 보고 없으면 쿠키를 본다.
+ * access/refresh token 쿠키 발급, 만료, 조회.
+ * 토큰은 Authorization 헤더를 먼저 보고, 없으면 쿠키를 본다.
  */
 @Component
-@RequiredArgsConstructor
 public class JwtCookieManager {
 
     public static final String ACCESS_TOKEN_COOKIE = "accessToken";
@@ -25,6 +26,15 @@ public class JwtCookieManager {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtProvider jwtProvider;
+    private final List<String> allowedOrigins;
+
+    public JwtCookieManager(
+            JwtProvider jwtProvider,
+            @Value("${cors.allowed-origins}") List<String> allowedOrigins
+    ) {
+        this.jwtProvider = jwtProvider;
+        this.allowedOrigins = allowedOrigins;
+    }
 
     public void addTokenCookies(HttpServletResponse response, String accessToken, String refreshToken) {
         addCookie(response, ACCESS_TOKEN_COOKIE, accessToken, jwtProvider.getAccessTokenValiditySeconds());
@@ -60,8 +70,10 @@ public class JwtCookieManager {
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
+    // CSRF 방어: SameSite=None 쿠키는 다른 사이트의 요청에도 실리므로,
+    // 허용되지 않은 Origin 에서 온 요청이면 쿠키 토큰을 무시한다 (Origin 이 없는 앱/같은 출처 요청은 통과)
     private Optional<String> getCookie(HttpServletRequest request, String name) {
-        if (request.getCookies() == null) {
+        if (request.getCookies() == null || !isTrustedOrigin(request)) {
             return Optional.empty();
         }
         return Arrays.stream(request.getCookies())
@@ -69,5 +81,10 @@ public class JwtCookieManager {
                 .map(Cookie::getValue)
                 .filter(StringUtils::hasText)
                 .findFirst();
+    }
+
+    private boolean isTrustedOrigin(HttpServletRequest request) {
+        String origin = request.getHeader(HttpHeaders.ORIGIN);
+        return origin == null || allowedOrigins.contains(origin);
     }
 }

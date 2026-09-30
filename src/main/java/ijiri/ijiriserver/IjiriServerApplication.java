@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableJpaAuditing
+@EnableJpaAuditing(dateTimeProviderRef = "auditingDateTimeProvider")
 public class IjiriServerApplication {
 
     public static void main(String[] args) {

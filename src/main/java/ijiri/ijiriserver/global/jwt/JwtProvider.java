@@ -14,6 +14,7 @@ import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 public class JwtProvider {
@@ -74,10 +75,6 @@ public class JwtProvider {
         return refreshTokenValidityMillis / 1000;
     }
 
-    public boolean validateAccessToken(String token) {
-        return hasType(token, ACCESS_TYPE);
-    }
-
     public boolean validateRefreshToken(String token) {
         return hasType(token, REFRESH_TYPE);
     }
@@ -86,8 +83,18 @@ public class JwtProvider {
         return parse(token).getSubject();
     }
 
-    public String getSessionId(String accessToken) {
-        return parse(accessToken).get(SESSION_CLAIM, String.class);
+    // 서명·만료·토큰 종류를 한 번의 파싱으로 검증하고, 이후 필요한 값은 이 claims 에서 꺼낸다
+    public Optional<Claims> parseAccessToken(String token) {
+        try {
+            Claims claims = parse(token);
+            return ACCESS_TYPE.equals(claims.get(TYPE_CLAIM, String.class)) ? Optional.of(claims) : Optional.empty();
+        } catch (JwtException | IllegalArgumentException e) {
+            return Optional.empty();
+        }
+    }
+
+    public String getSessionId(Claims accessClaims) {
+        return accessClaims.get(SESSION_CLAIM, String.class);
     }
 
     private boolean hasType(String token, String type) {
@@ -98,8 +105,7 @@ public class JwtProvider {
         }
     }
 
-    public Authentication getAuthentication(String token) {
-        Claims claims = parse(token);
+    public Authentication getAuthentication(Claims claims) {
         String role = claims.get(ROLE_CLAIM, String.class);
         return new UsernamePasswordAuthenticationToken(
                 claims.getSubject(),

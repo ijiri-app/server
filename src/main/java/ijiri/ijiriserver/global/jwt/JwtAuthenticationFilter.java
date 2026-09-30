@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.global.jwt;
 
+import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,16 +24,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         jwtCookieManager.resolveAccessToken(request)
-                .filter(jwtProvider::validateAccessToken)
+                .flatMap(jwtProvider::parseAccessToken)
                 .filter(this::hasActiveSession)
-                .ifPresent(token -> SecurityContextHolder.getContext()
-                        .setAuthentication(jwtProvider.getAuthentication(token)));
+                .ifPresent(claims -> SecurityContextHolder.getContext()
+                        .setAuthentication(jwtProvider.getAuthentication(claims)));
         chain.doFilter(request, response);
     }
 
     // 로그아웃/다른 기기 로그인/탈퇴로 세션이 끝났으면 만료 전 access token 도 인증하지 않는다
-    private boolean hasActiveSession(String accessToken) {
-        String sessionId = jwtProvider.getSessionId(accessToken);
+    private boolean hasActiveSession(Claims claims) {
+        String sessionId = jwtProvider.getSessionId(claims);
         return sessionId != null && sessionValidator.isActive(sessionId);
     }
 }

@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.domain.member.service.impl;
 
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
+import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.domain.member.entity.Role;
@@ -65,7 +66,7 @@ class MemberServiceImplTest {
 
         memberService.purge(1L);
 
-        verify(eventPublisher).publishEvent(new MemberPurgedEvent(1L));
+        verify(eventPublisher).publishEvent(new MemberPurgedEvent(1L, Provider.KAKAO, "kakao-1"));
         verify(memberRepository).delete(member);
     }
 
@@ -76,6 +77,30 @@ class MemberServiceImplTest {
         memberService.purge(1L);
 
         verify(memberRepository, never()).delete(any());
+    }
+
+    @Test
+    void 소셜_닉네임이_12자를_넘으면_12자로_자른다() {
+        when(memberRepository.findByProviderAndProviderMemberId(any(), any())).thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MemberRegisterResult result = memberService.registerIfAbsent(
+                new MemberRegisterCommand(Provider.GOOGLE, "google-1", null, "  열세글자가넘는아주긴구글이름  ", null)
+        );
+
+        assertThat(result.member().getNickname()).isEqualTo("열세글자가넘는아주긴구글");
+    }
+
+    @Test
+    void 소셜_닉네임이_없거나_2자보다_짧으면_기본_닉네임을_만든다() {
+        when(memberRepository.findByProviderAndProviderMemberId(any(), any())).thenReturn(Optional.empty());
+        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        MemberRegisterResult result = memberService.registerIfAbsent(
+                new MemberRegisterCommand(Provider.KAKAO, "kakao-2", null, "김", null)
+        );
+
+        assertThat(result.member().getNickname()).startsWith("이지리오너");
     }
 
     private Member kakaoMember(LocalDateTime deletedAt) {

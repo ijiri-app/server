@@ -15,6 +15,8 @@ public interface MemberService {
 
     Member getById(Long memberId);
 
+    Optional<Member> findActiveMember(Long memberId);
+
     MemberRegisterResult registerIfAbsent(MemberRegisterCommand command);
 
     Member signup(MemberSignupCommand command);

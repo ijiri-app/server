@@ -10,7 +10,6 @@ public enum CommonStatusCode implements StatusCode {
 
     // 성공
     OK(HttpStatus.OK, "COMMON200", "요청에 성공했습니다."),
-    CREATED(HttpStatus.CREATED, "COMMON201", "리소스가 생성되었습니다."),
 
     // 클라이언트 에러
     BAD_REQUEST(HttpStatus.BAD_REQUEST, "COMMON400", "잘못된 요청입니다."),

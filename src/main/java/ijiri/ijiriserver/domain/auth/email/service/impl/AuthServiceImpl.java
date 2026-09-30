@@ -6,21 +6,17 @@ import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
-import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
-import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.event.EventListener;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.Optional;
@@ -40,7 +36,6 @@ public class AuthServiceImpl implements AuthService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
-    private final RefreshTokenRepository refreshTokenRepository;
 
     // 인증 완료 기록을 먼저 소모해 이메일 소유가 증명된 뒤에만 가입하고, 중복 여부도 그때만 알려준다.
     // 가입된 이메일로는 인증 코드가 발송되지 않으므로 중복 에러는 동시 가입 경합에서만 난다.
@@ -76,15 +71,7 @@ public class AuthServiceImpl implements AuthService {
 
     // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
-    @Transactional
     public AuthResponse signOut(Long memberId) {
-        refreshTokenRepository.deleteAllByMemberId(memberId);
-        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
-    }
-
-    @EventListener
-    @Transactional
-    public void revokeAll(MemberWithdrawnEvent event) {
-        refreshTokenRepository.deleteAllByMemberId(event.memberId());
+        return tokenService.signOut(memberId);
     }
 }

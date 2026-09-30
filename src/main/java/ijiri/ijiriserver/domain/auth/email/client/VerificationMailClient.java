@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-public class VerificationMailSender {
+public class VerificationMailClient {
 
     private static final String SUBJECT = "[이지리] 이메일 인증 코드";
 

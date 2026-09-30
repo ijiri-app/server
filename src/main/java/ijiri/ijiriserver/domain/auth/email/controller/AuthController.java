@@ -30,7 +30,6 @@ import java.time.Duration;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
-@SecurityRequirements
 public class AuthController {
 
     // 여러 계정을 돌려가며 대입하는 공격을 막는 IP 단위 제한 (계정 단위 제한은 서비스에서)
@@ -44,9 +43,10 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 회원가입",
-            description = "인증 코드 확인을 마친 이메일 + 비밀번호, 닉네임, 필수 동의로 가입. "
+            description = "인증 코드 확인을 마친 이메일 + 비밀번호, 닉네임으로 가입. "
                     + "가입과 동시에 로그인되어 토큰을 body 와 쿠키로 발급한다"
     )
+    @SecurityRequirements
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/signup")
     public BaseResponse<AuthResponse> signup(
@@ -62,6 +62,7 @@ public class AuthController {
             summary = "이메일 로그인",
             description = "이메일, 비밀번호로 로그인. 계정/IP 별로 15분당 시도 횟수 제한"
     )
+    @SecurityRequirements
     @PostMapping("/signin")
     public BaseResponse<AuthResponse> signIn(
             @Valid @RequestBody SignInRequest request,

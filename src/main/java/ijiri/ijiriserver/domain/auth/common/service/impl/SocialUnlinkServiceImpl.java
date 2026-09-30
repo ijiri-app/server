@@ -3,7 +3,10 @@ package ijiri.ijiriserver.domain.auth.common.service.impl;
 import ijiri.ijiriserver.domain.auth.common.client.SocialUnlinkClient;
 import ijiri.ijiriserver.domain.auth.common.service.SocialUnlinkService;
 import ijiri.ijiriserver.domain.member.entity.Provider;
+import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -13,6 +16,11 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+/**
+ * 탈퇴한 회원의 소셜 계정 연결 끊기. 외부 API 응답을 기다리는 동안 DB 커넥션을 잡지 않도록
+ * 탈퇴 커밋 뒤에 호출하고, 실패하면 영구 삭제 직전에 다시 시도한다 (이미 끊긴 계정은 성공으로 처리되므로 멱등).
+ */
+@Slf4j
 @Service
 public class SocialUnlinkServiceImpl implements SocialUnlinkService {
 
@@ -23,15 +31,33 @@ public class SocialUnlinkServiceImpl implements SocialUnlinkService {
                 .collect(Collectors.toMap(SocialUnlinkClient::provider, Function.identity()));
     }
 
-    // 탈퇴 트랜잭션의 커밋 직전에 실행: 다른 정리 작업이 모두 끝난 뒤 외부 API 를 호출하고,
-    // 실패하면 예외로 탈퇴 전체가 롤백된다
+    // 탈퇴는 이미 커밋됐으므로 실패해도 응답을 바꾸지 않고, 영구 삭제 때 재시도한다
     @Override
-    @TransactionalEventListener(phase = TransactionPhase.BEFORE_COMMIT)
-    public void unlink(MemberWithdrawnEvent event) {
-        // 연결 끊기가 필요 없는 provider(구글, 이메일)는 구현체가 없으므로 아무것도 하지 않는다
-        SocialUnlinkClient client = clients.get(event.provider());
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    public void unlinkAfterWithdrawal(MemberWithdrawnEvent event) {
+        try {
+            unlink(event.provider(), event.providerMemberId());
+        } catch (RuntimeException e) {
+            log.warn(
+                    "Social unlink failed after withdrawal, will retry before purge: memberId={}",
+                    event.memberId(),
+                    e
+            );
+        }
+    }
+
+    // 실패하면 예외로 영구 삭제가 롤백되고 다음 스케줄에 다시 시도된다
+    @Override
+    @EventListener
+    public void unlinkBeforePurge(MemberPurgedEvent event) {
+        unlink(event.provider(), event.providerMemberId());
+    }
+
+    // 연결 끊기가 필요 없는 provider(구글, 이메일)는 구현체가 없으므로 아무것도 하지 않는다
+    private void unlink(Provider provider, String providerMemberId) {
+        SocialUnlinkClient client = clients.get(provider);
         if (client != null) {
-            client.unlink(event.providerMemberId());
+            client.unlink(providerMemberId);
         }
     }
 }

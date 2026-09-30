@@ -6,11 +6,13 @@ import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import ijiri.ijiriserver.global.jwt.SessionValidator;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -60,7 +62,24 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
         if (deleted == 0) {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
-        return issue(memberService.getById(Long.valueOf(jwtProvider.getSubject(refreshToken))));
+        // 탈퇴 등으로 활성 회원이 아니면 앱이 로그인 화면으로 가도록 404 가 아닌 401 로 응답한다
+        Member member = memberService.findActiveMember(Long.valueOf(jwtProvider.getSubject(refreshToken)))
+                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
+        return issue(member);
+    }
+
+    // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
+    @Override
+    @Transactional
+    public AuthResponse signOut(Long memberId) {
+        refreshTokenRepository.deleteAllByMemberId(memberId);
+        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
+    }
+
+    @EventListener
+    @Transactional
+    public void revokeAll(MemberWithdrawnEvent event) {
+        refreshTokenRepository.deleteAllByMemberId(event.memberId());
     }
 
     // 인증이 필요한 모든 요청에서 호출된다 (session_id 유니크 인덱스 조회 1회)

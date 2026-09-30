@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.auth.token.service.impl;
 
+import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.member.entity.Member;
@@ -14,6 +15,7 @@ import org.mockito.InOrder;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,7 +63,7 @@ class TokenServiceImplTest {
 
         assertThatThrownBy(() -> tokenService.refresh(replacedToken)).isInstanceOf(CustomException.class);
         verify(refreshTokenRepository, never()).deleteAllByMemberId(any());
-        verify(memberService, never()).getById(any());
+        verify(memberService, never()).findActiveMember(any());
     }
 
     @Test
@@ -70,6 +72,25 @@ class TokenServiceImplTest {
 
         assertThat(tokenService.isActive("session-1")).isTrue();
         assertThat(tokenService.isActive("deleted-session")).isFalse();
+    }
+
+    @Test
+    void 탈퇴한_회원의_refresh_token_은_404_가_아닌_유효하지_않은_토큰으로_거부한다() {
+        String refreshToken = jwtProvider.createRefreshToken("7", "session-1");
+        when(refreshTokenRepository.deleteValidByTokenHash(anyString(), any())).thenReturn(1);
+        when(memberService.findActiveMember(7L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> tokenService.refresh(refreshToken))
+                .isInstanceOfSatisfying(CustomException.class, e ->
+                        assertThat(e.getStatusCode()).isEqualTo(AuthStatusCode.INVALID_REFRESH_TOKEN)
+                );
+    }
+
+    @Test
+    void 로그아웃하면_회원의_refresh_token_을_모두_지운다() {
+        tokenService.signOut(7L);
+
+        verify(refreshTokenRepository).deleteAllByMemberId(7L);
     }
 
     @Test

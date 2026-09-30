@@ -31,7 +31,10 @@ import java.util.HexFormat;
 @Builder
 @Table(
         name = "refresh_token",
-        uniqueConstraints = @UniqueConstraint(name = "uk_refresh_token_session_id", columnNames = "session_id"),
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_refresh_token_token_hash", columnNames = "token_hash"),
+                @UniqueConstraint(name = "uk_refresh_token_session_id", columnNames = "session_id")
+        },
         indexes = @Index(name = "idx_refresh_token_member_id", columnList = "member_id")
 )
 public class RefreshToken {
@@ -43,7 +46,7 @@ public class RefreshToken {
     @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(name = "token_hash", nullable = false, unique = true, length = 64, updatable = false)
+    @Column(name = "token_hash", nullable = false, length = 64, updatable = false)
     private String tokenHash;
 
     @Column(name = "expires_at", nullable = false, updatable = false)

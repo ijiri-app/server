@@ -71,7 +71,8 @@ public class KakaoOAuthClient implements SocialTokenVerifier {
                     .uri(uri)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + accessToken)
                     .retrieve()
-                    .onStatus(status -> status.is4xxClientError(), (req, res) -> {
+                    // 토큰이 잘못됐으면 400/401. 그 외(429 요청 제한 등)는 카카오 쪽 문제로 보고 아래에서 502 로 처리
+                    .onStatus(status -> status.value() == 400 || status.value() == 401, (req, res) -> {
                         throw new CustomException(AuthStatusCode.INVALID_PROVIDER_TOKEN);
                     })
                     .body(type);

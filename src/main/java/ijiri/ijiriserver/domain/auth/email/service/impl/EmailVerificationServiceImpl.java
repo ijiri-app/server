@@ -2,7 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.service.impl;
 
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.email.client.VerificationMailSender;
+import ijiri.ijiriserver.domain.auth.email.client.VerificationMailClient;
 import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
 import ijiri.ijiriserver.domain.auth.email.repository.EmailVerificationRepository;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.security.SecureRandom;
 import java.time.Clock;
@@ -36,10 +37,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private static final String REGISTERED_NOTICE_KEY_PREFIX = "verification:registered:";
 
     private final EmailVerificationRepository emailVerificationRepository;
-    private final VerificationMailSender verificationMailSender;
+    private final VerificationMailClient verificationMailClient;
     private final MemberService memberService;
     private final RateLimiter rateLimiter;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
 
     // 가입된 이메일도 응답(성공/재발송 대기)은 미가입 이메일과 똑같이 두어 가입 여부가 드러나지 않게 한다.
     // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
@@ -51,24 +53,12 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             return codeSentResponse();
         }
 
-        LocalDateTime now = LocalDateTime.now(clock);
-        LocalDateTime expiresAt = now.plusMinutes(CODE_VALID_MINUTES);
         String code = generateCode();
-
-        EmailVerification verification = emailVerificationRepository.findByEmail(email)
-                .map(existing -> {
-                    if (!existing.canResend(now, RESEND_COOLDOWN_SECONDS)) {
-                        throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
-                    }
-                    existing.resend(code, now, expiresAt);
-                    return existing;
-                })
-                .orElseGet(() -> EmailVerification.of(email, code, now, expiresAt));
-        EmailVerification saved = save(verification);
+        EmailVerification saved = transactionTemplate.execute(status -> saveCode(email, code));
 
         // 발송에 실패하면 받지 못한 코드가 남아 재발송 대기에 걸리지 않도록 지운다
         try {
-            verificationMailSender.sendCode(email, code, CODE_VALID_MINUTES);
+            verificationMailClient.sendCode(email, code, CODE_VALID_MINUTES);
         } catch (CustomException e) {
             emailVerificationRepository.delete(saved);
             throw e;
@@ -117,16 +107,28 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
         }
         if (withdrawn) {
-            verificationMailSender.sendWithdrawnAccount(email);
+            verificationMailClient.sendWithdrawnAccount(email);
         } else {
-            verificationMailSender.sendAlreadyRegistered(email);
+            verificationMailClient.sendAlreadyRegistered(email);
         }
     }
 
-    // 같은 이메일로 처음 발송 요청이 동시에 들어오면 한쪽은 유니크 제약에 걸린다
-    private EmailVerification save(EmailVerification verification) {
+    // 기존 행은 잠근 뒤 재발송 대기를 확인하고 갱신한다.
+    // 같은 이메일로 처음 발송 요청이 동시에 들어오면 잠글 행이 없어 한쪽은 유니크 제약에 걸린다
+    private EmailVerification saveCode(String email, String code) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime expiresAt = now.plusMinutes(CODE_VALID_MINUTES);
+        Optional<EmailVerification> existing = emailVerificationRepository.findByEmailForUpdate(email);
+        if (existing.isPresent()) {
+            EmailVerification verification = existing.get();
+            if (!verification.canResend(now, RESEND_COOLDOWN_SECONDS)) {
+                throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
+            }
+            verification.resend(code, now, expiresAt);
+            return verification;
+        }
         try {
-            return emailVerificationRepository.save(verification);
+            return emailVerificationRepository.saveAndFlush(EmailVerification.of(email, code, now, expiresAt));
         } catch (DataIntegrityViolationException e) {
             throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
         }

@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Optional;
 
-@Tag(name = "token", description = "토큰")
+@Tag(name = "Auth", description = "회원가입 / 로그인 / 토큰")
 @RestController
 @RequestMapping("/token")
 @RequiredArgsConstructor

@@ -7,7 +7,6 @@ import org.springframework.context.MessageSourceResolvable;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -79,11 +78,6 @@ public class GlobalExceptionHandler {
     })
     public ResponseEntity<BaseResponse<Void>> handleBadRequest(Exception e) {
         return toResponse(CommonStatusCode.BAD_REQUEST);
-    }
-
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<BaseResponse<Void>> handleAccessDenied(AccessDeniedException e) {
-        return toResponse(CommonStatusCode.FORBIDDEN);
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

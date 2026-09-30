@@ -18,7 +18,6 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.util.StringUtils;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
@@ -32,6 +31,9 @@ import java.util.concurrent.ThreadLocalRandom;
 public class MemberServiceImpl implements MemberService {
 
     private static final String DEFAULT_NICKNAME_PREFIX = "이지리오너";
+    // 이메일 가입과 같은 닉네임 규칙(2~12자)을 소셜 닉네임에도 적용한다
+    private static final int MIN_NICKNAME_LENGTH = 2;
+    private static final int MAX_NICKNAME_LENGTH = 12;
     // 탈퇴 후 회원 행과 데이터를 보관하는 기간. 이 기간 동안은 같은 계정으로 재가입할 수 없다
     private static final long WITHDRAWAL_RETENTION_DAYS = 30;
 
@@ -46,8 +48,13 @@ public class MemberServiceImpl implements MemberService {
 
     @Override
     public Member getById(Long memberId) {
-        return memberRepository.findByIdAndDeletedAtIsNull(memberId)
+        return findActiveMember(memberId)
                 .orElseThrow(() -> new CustomException(MemberStatusCode.MEMBER_NOT_FOUND));
+    }
+
+    @Override
+    public Optional<Member> findActiveMember(Long memberId) {
+        return memberRepository.findByIdAndDeletedAtIsNull(memberId);
     }
 
     @Override
@@ -119,7 +126,11 @@ public class MemberServiceImpl implements MemberService {
         memberRepository.findById(memberId)
                 .filter(Member::isWithdrawn)
                 .ifPresent(member -> {
-                    eventPublisher.publishEvent(new MemberPurgedEvent(memberId));
+                    eventPublisher.publishEvent(new MemberPurgedEvent(
+                            memberId,
+                            member.getProvider(),
+                            member.getProviderMemberId()
+                    ));
                     memberRepository.delete(member);
                 });
     }
@@ -139,11 +150,16 @@ public class MemberServiceImpl implements MemberService {
                 .build();
     }
 
-    // nickname 은 선택 동의라 없을 수 있다. 가입 단계에서 입력받지 않도록 기본값을 만든다
+    // 소셜 닉네임은 선택 동의라 없거나 규칙보다 짧거나 길 수 있다.
+    // 가입 단계에서 입력받지 않도록 긴 닉네임은 자르고, 없거나 짧으면 기본값을 만든다
     private String resolveNickname(String nickname) {
-        if (StringUtils.hasText(nickname)) {
-            return nickname;
+        String trimmed = nickname == null ? "" : nickname.strip();
+        if (trimmed.codePointCount(0, trimmed.length()) < MIN_NICKNAME_LENGTH) {
+            return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
         }
-        return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
+        return trimmed.codePoints()
+                .limit(MAX_NICKNAME_LENGTH)
+                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
+                .toString();
     }
 }

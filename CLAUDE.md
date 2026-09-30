@@ -37,10 +37,10 @@ ijiri.ijiriserver
 │   ├── auth
 │   │   ├── common                shared by all providers
 │   │   │   ├── client            SocialTokenVerifier, SocialUnlinkClient (strategy interfaces)
-│   │   │   ├── dto               internal DTOs (SocialMemberInfo), dto/response (AuthResponse)
+│   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout, /auth/email/verification-code
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
@@ -48,7 +48,7 @@ ijiri.ijiriserver
 │   │   │   ├── controller  dto/request  dto/response  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
-│   │   └── token                 POST /auth/refresh
+│   │   └── token                 POST /auth/refresh, /auth/signout (TokenController)
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
@@ -58,12 +58,16 @@ ijiri.ijiriserver
 │       ├── controller  dto/request  dto/response  entity  exception
 │       ├── repository  service  service/impl
 └── global
-    ├── config                    SecurityConfig, SwaggerConfig
+    ├── config                    SecurityConfig, SwaggerConfig, ClockConfig (Asia/Seoul Clock + auditing),
+    │                             HttpClientConfig (timeouts for external APIs)
     ├── entity                    BaseTimeEntity
-    ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler
+    ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
+    │                             CustomErrorController (/error -> BaseResponse)
     ├── jwt                       JwtProvider, JwtAuthenticationFilter
+    ├── ratelimit                 RateLimiter (in-memory fixed window)
     ├── response                  BaseResponse
-    └── security                  401/403 handlers returning BaseResponse
+    ├── security                  401/403 handlers returning BaseResponse
+    └── validation                @MaxUtf8Bytes
 ```
 
 Package rules:
@@ -81,8 +85,12 @@ Package rules:
 - **SRP**: one reason to change per class. External API calls go in `client`,
   orchestration in `service`, HTTP mapping in `controller`.
 - **OCP**: add a new social provider (e.g. Apple) by adding a sub-package with a
-  `SocialTokenVerifier` (and `SocialUnlinkClient` if needed) implementation plus a `Provider`
-  enum value; `OAuthService` picks it up automatically. Do not modify existing providers.
+  `SocialTokenVerifier` (returns `MemberRegisterCommand`; and `SocialUnlinkClient` if needed)
+  implementation plus a `Provider` enum value; `OAuthService` picks it up automatically.
+  Do not modify existing providers.
+- **Cross-domain cleanup** goes through `MemberWithdrawnEvent`; `member` never calls other
+  domains' services (no package cycles). External calls on withdrawal listen with
+  `@TransactionalEventListener(phase = BEFORE_COMMIT)`.
 - **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
 - **ISP**: applied pragmatically, not mechanically. See *Service layer* — do not split a
   service into per-method interfaces just to satisfy ISP.
@@ -155,6 +163,9 @@ Package rules:
 - Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls,
   method-level `@Transactional` on writes.
 - Constants: `private static final` UPPER_SNAKE_CASE.
+- Current time: always `LocalDateTime.now(clock)` with the injected `Clock`, never `now()`.
+- External HTTP clients use the `externalApiRequestFactory` bean (timeouts), never `RestClient.create()`.
+- Services never take `HttpServletRequest/Response`; cookies, IPs and headers are handled in controllers.
 - Comments: only where intent is not obvious from code (why, not what). Korean is allowed.
 
 ### API
@@ -183,17 +194,29 @@ Package rules:
 - Tokens are returned in the body AND as `accessToken` / `refreshToken` cookies
   (HttpOnly, Secure, SameSite=None) via `JwtCookieManager`. Access token is read from the
   `Authorization` header first, then the cookie. Refresh reads the body, then the cookie.
-- Sign-out: resolve access token (header -> cookie), 401 if missing/invalid, load the member,
-  expire both cookies, delete all of the member's refresh tokens.
-- Refresh tokens are stored as SHA-256 hashes only, rotated on reissue,
-  and expired rows are purged daily by `RefreshTokenCleanupScheduler`.
+- CSRF: cookie tokens are ignored when the request has an `Origin` header that is not in
+  `cors.allowed-origins`.
+- Sign-out is an authenticated endpoint (`@AuthenticationPrincipal`): expire both cookies and
+  delete all of the member's refresh tokens. Withdrawal also expires the cookies.
+- Refresh tokens are stored as SHA-256 hashes only, rotated on reissue (atomic delete),
+  capped at 10 per member (oldest removed), and expired rows are purged daily by
+  `RefreshTokenCleanupScheduler`. A validly signed refresh token that is no longer stored is
+  treated as reuse: all of that member's refresh tokens are revoked.
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use
   `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
-- Sign-up sends the email verification code in the same request: 6-char alphanumeric code
-  bound to that email, valid 10 min, 5 attempts, 60 s resend cooldown, deleted on success
-  (single use).
+- Email verification: 6-char alphanumeric code bound to that email, valid 10 min, 5 attempts,
+  60 s resend cooldown, deleted on success (single use). For an already registered email the
+  API answers identically and only a notice mail is sent (no account enumeration).
+  Sign-up verifies the code first, then creates the member.
+- Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP,
+  verification-code 10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
+- Passwords: 8-64 chars and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
+- Social emails are stored only when the provider marks them verified; `member.email` is nullable.
 - Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.
 - Secrets come from `.env` (never commit it). Never log tokens or secrets.
+- Profiles: `local` (default; ddl-auto update, show-sql, dev JWT secret fallback) and `prod`
+  (set `SPRING_PROFILES_ACTIVE=prod`; ddl-auto validate, every secret required, forwarded
+  headers for client IP).
 
 ## Commit convention
 

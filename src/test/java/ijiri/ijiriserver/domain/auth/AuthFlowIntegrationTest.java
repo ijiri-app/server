@@ -13,8 +13,10 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
@@ -22,11 +24,14 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * SecurityConfig 의 공개 경로, 세션 기반 access token 무효화까지 실제 필터 체인으로 검증한다.
+ * 요청 제한(RateLimiter)은 메모리 기반이라 같은 컨텍스트의 테스트끼리 IP 별 횟수가 누적되므로,
+ * 요청마다 다른 IP 를 써서 테스트 수나 실행 순서와 무관하게 한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class AuthFlowIntegrationTest {
 
     private static final String PASSWORD = "abcd1234";
+    private static final AtomicInteger IP_SEQUENCE = new AtomicInteger();
 
     @Autowired
     private MockMvc mockMvc;
@@ -110,6 +116,15 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
+    void 토큰이_하나도_없어도_로그아웃은_성공하고_쿠키를_만료시킨다() throws Exception {
+        mockMvc.perform(post("/auth/signout"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH2002"))
+                .andExpect(cookie().maxAge("accessToken", 0))
+                .andExpect(cookie().maxAge("refreshToken", 0));
+    }
+
+    @Test
     void 탈퇴하면_세션이_끊기고_같은_계정으로_로그인할_수_없다() throws Exception {
         String email = newEmail();
         Tokens tokens = signup(email);
@@ -143,7 +158,15 @@ class AuthFlowIntegrationTest {
     }
 
     private ResultActions postJson(String url, String body) throws Exception {
-        return mockMvc.perform(post(url).contentType(MediaType.APPLICATION_JSON).content(body));
+        return mockMvc.perform(post(url).contentType(MediaType.APPLICATION_JSON).content(body).with(uniqueIp()));
+    }
+
+    private RequestPostProcessor uniqueIp() {
+        return request -> {
+            int sequence = IP_SEQUENCE.getAndIncrement();
+            request.setRemoteAddr("10.0.%d.%d".formatted(sequence / 250, sequence % 250));
+            return request;
+        };
     }
 
     private Tokens tokens(ResultActions result) throws Exception {

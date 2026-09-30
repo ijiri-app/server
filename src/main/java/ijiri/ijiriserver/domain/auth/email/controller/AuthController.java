@@ -6,8 +6,6 @@ import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
-import ijiri.ijiriserver.global.exception.CommonStatusCode;
-import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import ijiri.ijiriserver.global.response.BaseResponse;
@@ -80,8 +78,8 @@ public class AuthController {
 
     @Operation(
             summary = "로그아웃",
-            description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, "
-                    + "access token 이 만료됐으면 body 또는 쿠키의 refreshToken 세션을 지운다. 토큰 쿠키도 만료"
+            description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, 없으면 body 또는 쿠키의 "
+                    + "refreshToken 세션을 지운다. 토큰이 하나도 없어도 쿠키를 만료시키고 성공으로 응답한다"
     )
     @PostMapping("/signout")
     public BaseResponse<AuthResponse> signOut(
@@ -90,16 +88,15 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        AuthResponse response = memberId != null
-                ? authService.signOut(Long.valueOf(memberId))
-                : authService.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
+        // 로그아웃은 몇 번 호출해도 결과가 같다. 지울 세션이 없어도 쿠키는 항상 만료시키고 성공으로 응답한다
         jwtCookieManager.expireTokenCookies(httpResponse);
-        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
-    }
-
-    private String resolveRefreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        if (memberId != null) {
+            return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, authService.signOut(Long.valueOf(memberId)));
+        }
         String bodyToken = request == null ? null : request.refreshToken();
-        return jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
-                .orElseThrow(() -> new CustomException(CommonStatusCode.UNAUTHORIZED));
+        AuthResponse response = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
+                .map(authService::signOutByRefreshToken)
+                .orElseGet(() -> AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage()));
+        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
     }
 }

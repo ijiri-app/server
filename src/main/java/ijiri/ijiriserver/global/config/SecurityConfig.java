@@ -60,7 +60,7 @@ public class SecurityConfig {
                                 "/auth/email/verification-code",
                                 "/auth/email/verification-code/verify",
                                 "/auth/signin",
-                                "/auth/refresh"
+                                "/token/refresh"
                         ).permitAll()
                         .requestMatchers(
                                 "/error"

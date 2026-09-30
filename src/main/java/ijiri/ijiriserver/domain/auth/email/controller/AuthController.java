@@ -9,6 +9,7 @@ import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import ijiri.ijiriserver.global.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,6 +17,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -70,5 +72,20 @@ public class AuthController {
         AuthResponse response = authService.signIn(request);
         jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, response);
+    }
+
+    @Operation(
+            summary = "로그아웃",
+            description = "Authorization 헤더 또는 accessToken 쿠키의 회원을 로그아웃. "
+                    + "토큰 쿠키를 만료시키고 refresh token 을 모두 삭제(모든 기기 로그아웃)"
+    )
+    @PostMapping("/signout")
+    public BaseResponse<AuthResponse> signOut(
+            @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
+            HttpServletResponse httpResponse
+    ) {
+        AuthResponse response = authService.signOut(Long.valueOf(memberId));
+        jwtCookieManager.expireTokenCookies(httpResponse);
+        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
     }
 }

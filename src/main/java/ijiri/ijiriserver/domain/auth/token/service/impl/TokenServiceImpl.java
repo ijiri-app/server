@@ -6,13 +6,11 @@ import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.entity.Member;
-import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -66,20 +64,6 @@ public class TokenServiceImpl implements TokenService {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
         return issue(memberService.getById(memberId));
-    }
-
-    // 모든 기기에서 로그아웃. access token 은 stateless 라 만료(최대 1시간)까지 유효하다
-    @Override
-    @Transactional
-    public AuthResponse signOut(Long memberId) {
-        refreshTokenRepository.deleteAllByMemberId(memberId);
-        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
-    }
-
-    @EventListener
-    @Transactional
-    public void revokeAll(MemberWithdrawnEvent event) {
-        refreshTokenRepository.deleteAllByMemberId(event.memberId());
     }
 
     private void removeOldestBeyondLimit(Long memberId) {

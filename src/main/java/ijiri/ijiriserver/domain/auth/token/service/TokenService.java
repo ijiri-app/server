@@ -8,6 +8,4 @@ public interface TokenService {
     AuthResponse issue(Member member);
 
     AuthResponse refresh(String refreshToken);
-
-    AuthResponse signOut(Long memberId);
 }

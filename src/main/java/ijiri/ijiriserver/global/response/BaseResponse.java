@@ -20,8 +20,9 @@ public record BaseResponse<T>(
         return new BaseResponse<>(statusCode.getCode(), statusCode.getMessage(), result);
     }
 
+    // 에러 응답임을 호출부에서 드러내기 위한 이름. 형태는 성공 응답과 같다
     public static <T> BaseResponse<T> onFailure(StatusCode statusCode, T result) {
-        return new BaseResponse<>(statusCode.getCode(), statusCode.getMessage(), result);
+        return of(statusCode, result);
     }
 
     public static <T> BaseResponse<T> onFailure(StatusCode statusCode) {

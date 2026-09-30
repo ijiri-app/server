@@ -1,0 +1,14 @@
+spring:
+  jpa:
+    show-sql: true
+
+# 로컬 전용 값. 운영(prod)에서는 환경 변수가 없으면 기동에 실패한다
+jwt:
+  secret: ${JWT_SECRET:ijiri-local-test-secret-key-0123456789abcdef}
+
+oauth:
+  kakao:
+    admin-key: ${KAKAO_ADMIN_KEY:}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}

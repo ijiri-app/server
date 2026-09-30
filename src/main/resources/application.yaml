@@ -2,49 +2,60 @@ spring:
   application:
     name: IjiriServer
 
+  # 프로필을 지정하지 않으면 로컬 설정으로 뜬다. 운영은 SPRING_PROFILES_ACTIVE=prod
+  profiles:
+    default: local
+
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    # Gmail 은 계정 비밀번호가 아니라 앱 비밀번호
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+  # 스키마는 Flyway 마이그레이션(db/migration)으로만 바꾼다. Hibernate 는 엔티티와 대조만 한다
+  flyway:
+    enabled: true
+
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: validate
+    show-sql: false
 
-  security:
-    oauth2:
-      client:
-        registration:
-          kakao:
-            client-id: ${KAKAO_CLIENT_ID:dummy}
-            client-secret: ${KAKAO_CLIENT_SECRET:dummy}
-            client-authentication-method: client_secret_post
-            authorization-grant-type: authorization_code
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}"
-            scope: profile_nickname, profile_image, account_email
-            client-name: Kakao
+  jackson:
+    mapper:
+      # provider 를 "kakao" 처럼 소문자로 보내도 enum 으로 받는다
+      accept-case-insensitive-enums: true
 
-          google:
-            client-id: ${GOOGLE_CLIENT_ID:dummy}
-            client-secret: ${GOOGLE_CLIENT_SECRET:dummy}
-            scope: openid, profile, email
-
-        provider:
-          kakao:
-            authorization-uri: https://kauth.kakao.com/oauth/authorize
-            token-uri: https://kauth.kakao.com/oauth/token
-            user-info-uri: https://kapi.kakao.com/v2/user/me
-            user-name-attribute: id
-
+# 필수 값은 기본값을 두지 않아, 빠지면 기동 시점에 실패한다
 jwt:
-  secret: ${JWT_SECRET:ijiri-local-test-secret-key-0123456789abcdef}
-  access-token-validity-seconds: 3600
-  refresh-token-validity-seconds: 1209600
+  secret: ${JWT_SECRET}
+  access-token-validity-seconds: 3600 # 1시간
+  refresh-token-validity-seconds: 2419200 # 28일
 
-oauth2:
-  authorized-redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth/callback}
+oauth:
+  kakao:
+    app-id: ${KAKAO_APP_ID}
+    # 회원 탈퇴 시 카카오 연결 끊기 API 호출용 (콘솔 > 앱 키 > Admin 키)
+    admin-key: ${KAKAO_ADMIN_KEY}
+  google:
+    # Android/iOS/Web 클라이언트 ID 를 콤마로 구분해서 모두 넣는다 (ID token 의 aud 검증용)
+    client-ids: ${GOOGLE_CLIENT_IDS}
 
 cors:
-  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}

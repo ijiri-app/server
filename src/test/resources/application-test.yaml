@@ -20,3 +20,6 @@ oauth:
     admin-key: test
   google:
     client-ids: test-client-id
+
+cors:
+  allowed-origins: http://localhost:3000

@@ -10,6 +10,7 @@ import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -61,6 +62,10 @@ public class AuthServiceImpl implements AuthService {
         boolean matches = passwordEncoder.matches(request.password(), passwordHash);
         Member member = found.filter(ignored -> matches)
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_CREDENTIALS));
+        // 비밀번호가 맞은 뒤에만 탈퇴 여부를 알려, 탈퇴 계정 존재가 제3자에게 드러나지 않게 한다
+        if (member.isWithdrawn()) {
+            throw new CustomException(MemberStatusCode.MEMBER_WITHDRAWN);
+        }
         return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
     }
 }

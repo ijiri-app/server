@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.interestcar.service.impl;
 
 import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.repository.MemberInterestCarRepository;
+import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import org.junit.jupiter.api.Test;
 
@@ -18,7 +19,8 @@ import static org.mockito.Mockito.when;
 class InterestCarServiceImplTest {
 
     private final MemberInterestCarRepository repository = mock(MemberInterestCarRepository.class);
-    private final InterestCarServiceImpl service = new InterestCarServiceImpl(repository);
+    private final MemberService memberService = mock(MemberService.class);
+    private final InterestCarServiceImpl service = new InterestCarServiceImpl(repository, memberService);
 
     @Test
     void 중복_차종이_있으면_아무것도_지우지_않고_거부한다() {

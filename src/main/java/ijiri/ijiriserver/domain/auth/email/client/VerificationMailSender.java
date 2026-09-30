@@ -31,6 +31,10 @@ public class VerificationMailSender {
         send(to, "이미 이 이메일로 가입된 계정이 있습니다.\n본인이 요청하지 않았다면 이 메일은 무시해 주세요.");
     }
 
+    public void sendWithdrawnAccount(String to) {
+        send(to, "이 이메일은 탈퇴 처리된 계정입니다.\n탈퇴 후 30일이 지나면 다시 가입할 수 있습니다.");
+    }
+
     private void send(String to, String text) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);

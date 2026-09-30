@@ -6,6 +6,7 @@ import ijiri.ijiriserver.domain.auth.email.client.VerificationMailSender;
 import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
 import ijiri.ijiriserver.domain.auth.email.repository.EmailVerificationRepository;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
+import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -18,6 +19,7 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -43,8 +45,9 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
     @Override
     public AuthResponse sendCode(String email) {
-        if (memberService.existsEmailMember(email)) {
-            sendAlreadyRegisteredNotice(email);
+        Optional<Member> registered = memberService.findEmailMember(email);
+        if (registered.isPresent()) {
+            sendAlreadyRegisteredNotice(email, registered.get().isWithdrawn());
             return codeSentResponse();
         }
 
@@ -104,7 +107,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     }
 
     // 미가입 이메일의 재발송 대기와 같은 주기·같은 에러를 적용한다
-    private void sendAlreadyRegisteredNotice(String email) {
+    private void sendAlreadyRegisteredNotice(String email, boolean withdrawn) {
         boolean acquired = rateLimiter.tryAcquire(
                 REGISTERED_NOTICE_KEY_PREFIX + email,
                 1,
@@ -113,7 +116,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         if (!acquired) {
             throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
         }
-        verificationMailSender.sendAlreadyRegistered(email);
+        if (withdrawn) {
+            verificationMailSender.sendWithdrawnAccount(email);
+        } else {
+            verificationMailSender.sendAlreadyRegistered(email);
+        }
     }
 
     // 같은 이메일로 처음 발송 요청이 동시에 들어오면 한쪽은 유니크 제약에 걸린다

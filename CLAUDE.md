@@ -40,7 +40,7 @@ ijiri.ijiriserver
 │   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin,
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout,
 │   │   │   │                     /auth/email/verification-code, /auth/email/verification-code/verify
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
@@ -49,7 +49,7 @@ ijiri.ijiriserver
 │   │   │   ├── controller  dto/request  dto/response  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
-│   │   └── token                 POST /auth/refresh, /auth/signout (TokenController)
+│   │   └── token                 POST /token/refresh (TokenController)
 │   │       ├── controller  dto/request  dto/response  entity
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me

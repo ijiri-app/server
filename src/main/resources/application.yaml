@@ -28,6 +28,10 @@ spring:
           timeout: 5000
           writetimeout: 5000
 
+  # 스키마는 Flyway 마이그레이션(db/migration)으로만 바꾼다. Hibernate 는 엔티티와 대조만 한다
+  flyway:
+    enabled: true
+
   jpa:
     hibernate:
       ddl-auto: validate

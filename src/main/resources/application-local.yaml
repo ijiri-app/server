@@ -1,7 +1,5 @@
 spring:
   jpa:
-    hibernate:
-      ddl-auto: update
     show-sql: true
 
 # 로컬 전용 값. 운영(prod)에서는 환경 변수가 없으면 기동에 실패한다

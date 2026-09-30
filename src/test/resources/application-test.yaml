@@ -1,0 +1,22 @@
+# DB 와 .env 없이 테스트가 돌도록 H2(PostgreSQL 호환 모드)와 더미 값을 쓴다.
+# 스키마는 운영과 같은 Flyway 마이그레이션으로 만들고 ddl-auto validate 로 엔티티와 대조한다
+spring:
+  datasource:
+    url: jdbc:h2:mem:ijiri;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  mail:
+    username: test@ijiri.com
+    password: test
+
+jwt:
+  secret: test-secret-key-0123456789abcdef-0123456789
+
+oauth:
+  kakao:
+    app-id: 0
+    admin-key: test
+  google:
+    client-ids: test-client-id

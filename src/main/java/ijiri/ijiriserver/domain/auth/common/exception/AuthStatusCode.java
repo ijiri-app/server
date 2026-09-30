@@ -20,7 +20,7 @@ public enum AuthStatusCode implements StatusCode {
     VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH4004", "인증 코드가 만료되었습니다. 다시 요청해 주세요."),
     EMAIL_NOT_VERIFIED(HttpStatus.BAD_REQUEST, "AUTH4005", "이메일 인증이 필요합니다. 인증 코드를 다시 받아 주세요."),
     INVALID_PROVIDER_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH4011", "유효하지 않은 소셜 토큰입니다."),
-    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH4012", "유효하지 않은 리프레시 토큰입니다."),
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "AUTH4012", "리프레시 토큰이 없거나 유효하지 않습니다. 다시 로그인해 주세요."),
     INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "AUTH4013", "이메일 또는 비밀번호가 올바르지 않습니다."),
     VERIFICATION_ATTEMPTS_EXCEEDED(
             HttpStatus.TOO_MANY_REQUESTS,

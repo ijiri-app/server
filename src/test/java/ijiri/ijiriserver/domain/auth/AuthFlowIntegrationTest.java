@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth;
 
 import com.jayway.jsonpath.JsonPath;
 import ijiri.ijiriserver.domain.auth.email.client.VerificationMailClient;
+import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -132,6 +133,20 @@ class AuthFlowIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(cookie().maxAge("accessToken", 0))
                 .andExpect(cookie().maxAge("refreshToken", 0));
+    }
+
+    @Test
+    void 웹은_body_없이_refreshToken_쿠키만으로_로그아웃한다() throws Exception {
+        Tokens tokens = signup(newEmail());
+
+        Cookie refreshCookie = new Cookie("refreshToken", tokens.refreshToken());
+        mockMvc.perform(post("/auth/signout").cookie(refreshCookie).with(uniqueIp()))
+                .andExpect(status().isOk())
+                .andExpect(cookie().maxAge("accessToken", 0))
+                .andExpect(cookie().maxAge("refreshToken", 0));
+
+        postJson("/token/refresh", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test

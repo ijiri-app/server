@@ -89,17 +89,19 @@ public class AuthController {
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
-        if (memberId != null) {
-            jwtCookieManager.expireTokenCookies(httpResponse);
-            return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, authService.signOut(Long.valueOf(memberId)));
-        }
-        // 토큰이 하나도 없으면 로그인 상태가 아니므로 갱신 API 와 같은 코드(AUTH4012)로 거부한다.
-        // refresh token 이 있으면 이미 만료·삭제된 세션이어도 남은 쿠키를 지우도록 성공으로 응답한다
-        String bodyToken = request == null ? null : request.refreshToken();
-        String refreshToken = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
-                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
-        AuthResponse response = authService.signOutByRefreshToken(refreshToken);
+        // 두 경우 모두 세션을 먼저 지운 뒤 쿠키를 만료시킨다 (삭제가 실패하면 쿠키도 그대로 둔다)
+        AuthResponse response = memberId != null
+                ? authService.signOut(Long.valueOf(memberId))
+                : authService.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
         jwtCookieManager.expireTokenCookies(httpResponse);
         return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
+    }
+
+    // 토큰이 하나도 없으면 로그인 상태가 아니므로 갱신 API 와 같은 코드(AUTH4012)로 거부한다.
+    // refresh token 이 있으면 이미 만료·삭제된 세션이어도 남은 쿠키를 지우도록 성공으로 응답한다
+    private String resolveRefreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
+        String bodyToken = request == null ? null : request.refreshToken();
+        return jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
+                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
     }
 }

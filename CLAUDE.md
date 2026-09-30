@@ -40,7 +40,8 @@ ijiri.ijiriserver
 │   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/email/verification-code
+│   │   ├── email                 POST /auth/signup, /auth/signin,
+│   │   │   │                     /auth/email/verification-code, /auth/email/verification-code/verify
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
@@ -204,13 +205,17 @@ Package rules:
   treated as reuse: all of that member's refresh tokens are revoked.
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use
   `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
-- Email verification: 6-char alphanumeric code bound to that email, valid 10 min, 5 attempts,
-  60 s resend cooldown, deleted on success (single use). For an already registered email the
-  API answers identically and only a notice mail is sent (no account enumeration).
-  Sign-up verifies the code first, then creates the member.
+- Email sign-up is 3 steps: send code -> verify code -> sign up. Code: 6 digits bound to that
+  email, valid 5 min, 5 attempts, 60 s resend cooldown (resend resets verification).
+  Verifying marks the row verified and gives 30 min to sign up; sign-up atomically consumes
+  the verified row (one verification = one sign-up), creates the member and signs in
+  (tokens in body + cookies, `isNewMember = true`). For an already registered email the
+  send API answers identically and only a notice mail is sent (no account enumeration).
 - Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP,
   verification-code 10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
-- Passwords: 8-64 chars, at least one letter, one digit and one special character,
+- Sign-up fields: email, password, nickname 2-12 chars. Required consents are gated by the
+  client only (not sent or stored).
+- Passwords: 8-20 chars, at least one letter and one digit,
   and at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`, BCrypt limit).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
 - Use `signin` / `signout` / `signup` naming for auth, never `login` / `logout`.

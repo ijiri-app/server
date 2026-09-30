@@ -54,7 +54,7 @@ ijiri.ijiriserver
 │   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/DELETE /members/me
 │   │   ├── controller  dto  dto/response  entity  event  exception
-│   │   ├── repository  service  service/impl
+│   │   ├── repository  scheduler  service  service/impl
 │   └── interestcar               PUT /members/me/interest-cars
 │       ├── controller  dto/request  dto/response  entity  exception
 │       ├── repository  service  service/impl
@@ -89,9 +89,13 @@ Package rules:
   `SocialTokenVerifier` (returns `MemberRegisterCommand`; and `SocialUnlinkClient` if needed)
   implementation plus a `Provider` enum value; `OAuthService` picks it up automatically.
   Do not modify existing providers.
-- **Cross-domain cleanup** goes through `MemberWithdrawnEvent`; `member` never calls other
-  domains' services (no package cycles). External calls on withdrawal listen with
-  `@TransactionalEventListener(phase = BEFORE_COMMIT)`.
+- **Cross-domain cleanup** goes through member events; `member` never calls other domains'
+  services (no package cycles).
+  - `MemberWithdrawnEvent` (soft delete moment): things that must happen immediately
+    (revoke tokens, social unlink, hide posts). External calls listen with
+    `@TransactionalEventListener(phase = BEFORE_COMMIT)`.
+  - `MemberPurgedEvent` (row hard-deleted after 30 days): delete the member's data, including
+    uploaded files in storage. Listeners must be idempotent (a failure rolls back and retries).
 - **LSP**: implementations must honor the interface contract (same exceptions, no surprises).
 - **ISP**: applied pragmatically, not mechanically. See *Service layer* — do not split a
   service into per-method interfaces just to satisfy ISP.
@@ -203,6 +207,9 @@ Package rules:
   capped at 10 per member (oldest removed), and expired rows are purged daily by
   `RefreshTokenCleanupScheduler`. A validly signed refresh token that is no longer stored is
   treated as reuse: all of that member's refresh tokens are revoked.
+- Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or
+  re-register with the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn
+  members. `MemberPurgeScheduler` hard-deletes them after 30 days, one transaction per member.
 - Member identity = `provider + provider_member_id` (unique constraint). Email members use
   `provider = EMAIL`, `provider_member_id = email`; passwords are BCrypt hashes.
 - Email sign-up is 3 steps: send code -> verify code -> sign up. Code: 6 digits bound to that

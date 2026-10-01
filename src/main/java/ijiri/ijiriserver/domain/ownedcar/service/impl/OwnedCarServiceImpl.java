@@ -9,14 +9,22 @@ import ijiri.ijiriserver.domain.ownedcar.dto.request.OwnedCarCreateRequest;
 import ijiri.ijiriserver.domain.ownedcar.dto.request.OwnedCarUpdateRequest;
 import ijiri.ijiriserver.domain.ownedcar.dto.response.OwnedCarResponse;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 import ijiri.ijiriserver.domain.ownedcar.exception.OwnedCarStatusCode;
 import ijiri.ijiriserver.domain.ownedcar.repository.OwnedCarRepository;
+import ijiri.ijiriserver.domain.ownedcar.service.OwnedCarPostCounter;
 import ijiri.ijiriserver.domain.ownedcar.service.OwnedCarService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,11 +36,20 @@ public class OwnedCarServiceImpl implements OwnedCarService {
     private final OwnedCarRepository ownedCarRepository;
     private final CarModelService carModelService;
     private final MemberService memberService;
+    private final OwnedCarPostCounter ownedCarPostCounter;
 
+    // 지금 타는 차를 먼저, 그다음 이전 차량. 각각 등록순
     @Override
     public OwnedCarResponse getAll(Long memberId) {
-        return OwnedCarResponse.list(ownedCarRepository.findAllByMemberIdOrderByIdAsc(memberId).stream()
-                .map(car -> OwnedCarResponse.Car.of(car, specOf(car)))
+        List<OwnedCar> cars = ownedCarRepository.findAllByMemberIdOrderByIdAsc(memberId);
+        Map<Long, Long> postCounts = ownedCarPostCounter.countPosts(cars.stream().map(OwnedCar::getId).toList());
+        return OwnedCarResponse.list(cars.stream()
+                .sorted((a, b) -> a.getStatus().compareTo(b.getStatus()))
+                .map(car -> OwnedCarResponse.Item.of(
+                        car,
+                        carModelService.getSpecByTrim(car.getCarTrimId()),
+                        postCounts.getOrDefault(car.getId(), 0L)
+                ))
                 .toList()
         );
     }
@@ -45,47 +62,61 @@ public class OwnedCarServiceImpl implements OwnedCarService {
         if (ownedCarRepository.countByMemberId(memberId) >= MAX_OWNED_CARS) {
             throw new CustomException(OwnedCarStatusCode.OWNED_CAR_LIMIT_EXCEEDED);
         }
-        CarSpec spec = carModelService.getSpec(
-                request.carModelId(),
-                request.carGenerationId(),
-                request.carTrimId()
-        );
+        CarSpec spec = carModelService.getSpecByTrim(request.trimId());
+        carModelService.validateModelYear(spec.generationId(), request.year());
         OwnedCar car = ownedCarRepository.save(OwnedCar.of(
                 memberId,
                 spec,
-                request.modelYear(),
-                request.buildDirection()
+                request.year(),
+                request.buildStyle(),
+                request.nickname()
         ));
-        return OwnedCarResponse.single(OwnedCarResponse.Car.of(car, spec));
+        return OwnedCarResponse.created(car.getId());
     }
 
     @Override
     @Transactional
-    public OwnedCarResponse update(Long memberId, Long ownedCarId, OwnedCarUpdateRequest request) {
+    public void update(Long memberId, Long ownedCarId, OwnedCarUpdateRequest request) {
         OwnedCar car = getOwnedCar(memberId, ownedCarId);
-        CarSpec spec = carModelService.getSpec(
-                request.carModelId(),
-                request.carGenerationId(),
-                request.carTrimId()
-        );
-        car.update(spec, request.modelYear(), request.buildDirection());
-        return OwnedCarResponse.single(OwnedCarResponse.Car.of(car, spec));
+        if (request.year() != null) {
+            carModelService.validateModelYear(car.getCarGenerationId(), request.year());
+            car.changeModelYear(request.year());
+        }
+        if (request.buildStyle() != null) {
+            car.changeBuildStyle(request.buildStyle());
+        }
+        if (request.nickname() != null) {
+            car.changeNickname(request.nickname().isBlank() ? null : request.nickname().strip());
+        }
+        if (request.status() != null) {
+            car.changeStatus(request.status());
+        }
     }
 
-    // 게시물은 차량 정보를 복사해 두므로 보유 차량을 지워도 게시물에는 영향이 없다
     @Override
     @Transactional
-    public OwnedCarResponse delete(Long memberId, Long ownedCarId) {
-        ownedCarRepository.delete(getOwnedCar(memberId, ownedCarId));
-        return OwnedCarResponse.message(OwnedCarStatusCode.DELETE_SUCCESS.getMessage());
+    public void delete(Long memberId, Long ownedCarId) {
+        OwnedCar car = getOwnedCar(memberId, ownedCarId);
+        if (ownedCarPostCounter.countPosts(List.of(ownedCarId)).getOrDefault(ownedCarId, 0L) > 0) {
+            car.changeStatus(OwnedCarStatus.PAST);
+            return;
+        }
+        ownedCarRepository.delete(car);
     }
 
     @Override
     public OwnedCarSnapshot getSnapshot(Long memberId, Long ownedCarId) {
-        OwnedCar car = getOwnedCar(memberId, ownedCarId);
-        return new OwnedCarSnapshot(specOf(car), car.getModelYear(), car.getBuildDirection());
+        return toSnapshot(getOwnedCar(memberId, ownedCarId));
     }
 
+    @Override
+    public Map<Long, OwnedCarSnapshot> getSnapshots(Collection<Long> ownedCarIds) {
+        return ownedCarRepository.findAllById(ownedCarIds).stream()
+                .collect(Collectors.toMap(OwnedCar::getId, this::toSnapshot));
+    }
+
+    // 게시물을 먼저 지운 뒤에 실행되어야 한다 (영구 삭제 순서: 위시리스트·태그 -> 게시물 -> 보유 차량 -> 회원)
+    @Order(3)
     @EventListener
     @Transactional
     public void removeAll(MemberPurgedEvent event) {
@@ -93,11 +124,15 @@ public class OwnedCarServiceImpl implements OwnedCarService {
     }
 
     private OwnedCar getOwnedCar(Long memberId, Long ownedCarId) {
-        return ownedCarRepository.findByIdAndMemberId(ownedCarId, memberId)
+        OwnedCar car = ownedCarRepository.findById(ownedCarId)
                 .orElseThrow(() -> new CustomException(OwnedCarStatusCode.OWNED_CAR_NOT_FOUND));
+        if (!car.getMemberId().equals(memberId)) {
+            throw new CustomException(OwnedCarStatusCode.NOT_OWNER);
+        }
+        return car;
     }
 
-    private CarSpec specOf(OwnedCar car) {
-        return carModelService.getSpec(car.getCarModelId(), car.getCarGenerationId(), car.getCarTrimId());
+    private OwnedCarSnapshot toSnapshot(OwnedCar car) {
+        return new OwnedCarSnapshot(car.getId(), carModelService.getSpecByTrim(car.getCarTrimId()), car.getModelYear());
     }
 }

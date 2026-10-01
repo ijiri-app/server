@@ -2,208 +2,192 @@ package ijiri.ijiriserver.domain.post.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import ijiri.ijiriserver.domain.carmodel.dto.CarSpec;
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.part.dto.PartInfo;
 import ijiri.ijiriserver.domain.part.entity.PartCategory;
 import ijiri.ijiriserver.domain.post.entity.Post;
 import ijiri.ijiriserver.domain.post.entity.PostImage;
-import ijiri.ijiriserver.domain.post.entity.PostPartTag;
-import ijiri.ijiriserver.domain.post.entity.PostStatus;
+import ijiri.ijiriserver.domain.post.entity.PostPart;
 
 import java.time.LocalDateTime;
-import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 
 /**
- * post 도메인의 모든 API 응답.
- * 상세(작성/수정 포함)는 게시물 필드, 목록(피드, 회원 게시물)은 posts + nextCursor, 삭제는 message 만 채운다.
+ * post 도메인의 모든 API 응답. 상세는 게시물 필드, 목록(피드, 회원 게시물)은 items + nextCursor,
+ * 작성은 id 만 채운다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record PostResponse(
         Long id,
         Author author,
         Car car,
-        BuildDirection buildDirection,
         String content,
         List<Image> images,
-        List<PartGroup> partGroups,
-        Integer partCount,
-        PostStatus status,
+        List<Part> parts,
+        Long wishCount,
+        Boolean isMine,
         LocalDateTime createdAt,
-        List<Card> posts,
-        Long nextCursor,
-        String message
+        List<Card> items,
+        String nextCursor
 ) {
+
+    public static PostResponse created(Long id) {
+        return new PostResponse(id, null, null, null, null, null, null, null, null, null, null);
+    }
+
+    public static PostResponse cards(List<Card> items, Long nextCursor) {
+        return new PostResponse(
+                null, null, null, null, null, null, null, null, null,
+                items,
+                nextCursor != null ? String.valueOf(nextCursor) : null
+        );
+    }
 
     public static PostResponse detail(
             Post post,
             Member author,
             CarSpec spec,
-            Map<Long, PartInfo> parts,
-            Set<Long> wishlistedPartIds
+            Map<Long, PartInfo> partInfos,
+            Map<Long, Long> wishCounts,
+            Set<Long> wished,
+            boolean isMine
     ) {
+        List<Part> parts = post.getParts().stream()
+                .sorted(Comparator.comparing(PostPart::getCategory).thenComparing(PostPart::getDisplayOrder))
+                .map(part -> Part.of(
+                        part,
+                        partInfos.get(part.getPartId()),
+                        wishCounts.getOrDefault(part.getId(), 0L),
+                        wished.contains(part.getId())
+                ))
+                .toList();
         return new PostResponse(
                 post.getId(),
-                author != null ? new Author(author.getId(), author.getNickname(), author.getProfileImageUrl()) : null,
-                Car.of(spec, post.getModelYear()),
-                post.getBuildDirection(),
+                author != null ? Author.from(author) : null,
+                Car.of(post, spec),
                 post.getContent(),
                 post.getImages().stream()
-                        .map(image -> Image.of(image, parts))
+                        .map(image -> Image.of(image, post.getParts()))
                         .toList(),
-                partGroups(post, parts, wishlistedPartIds),
-                post.getPartCount(),
-                post.getStatus(),
+                parts,
+                parts.stream().mapToLong(Part::wishCount).sum(),
+                isMine,
                 post.getCreatedAt(),
                 null,
-                null,
                 null
         );
-    }
-
-    public static PostResponse cards(List<Card> posts, Long nextCursor) {
-        return new PostResponse(
-                null, null, null, null, null, null, null, null, null, null,
-                posts,
-                nextCursor,
-                null
-        );
-    }
-
-    public static PostResponse message(String message) {
-        return new PostResponse(
-                null, null, null, null, null, null, null, null, null, null, null, null,
-                message
-        );
-    }
-
-    // 분류 순서(익스테리어, 인테리어, 파워트레인, 하체)대로, 분류 안에서는 사진·태그에 처음 나온 순서대로
-    private static List<PartGroup> partGroups(Post post, Map<Long, PartInfo> parts, Set<Long> wishlistedPartIds) {
-        List<PartInfo> tagged = post.getImages().stream()
-                .flatMap(image -> image.getTags().stream())
-                .map(PostPartTag::getPartId)
-                .distinct()
-                .map(parts::get)
-                .filter(Objects::nonNull)
-                .toList();
-        return Arrays.stream(PartCategory.values())
-                .map(category -> new PartGroup(
-                        category,
-                        tagged.stream()
-                                .filter(part -> part.category() == category)
-                                .map(part -> new PartItem(
-                                        part.id(),
-                                        part.name(),
-                                        part.brandName(),
-                                        wishlistedPartIds.contains(part.id())
-                                ))
-                                .toList()
-                ))
-                .filter(group -> !group.parts().isEmpty())
-                .toList();
     }
 
     public record Author(
             Long id,
             String nickname,
-            String profileImageUrl
+            String profileImageUrl,
+            String statusMessage
     ) {
+
+        static Author from(Member member) {
+            return new Author(
+                    member.getId(),
+                    member.getNickname(),
+                    member.getProfileImageUrl(),
+                    member.getStatusMessage()
+            );
+        }
     }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Car(
+            Long ownedCarId,
             Long carModelId,
-            String manufacturer,
-            String modelName,
-            Long carGenerationId,
+            String carModelName,
             String generationCode,
-            Long carTrimId,
             String trimName,
-            Integer modelYear
+            int year,
+            BuildStyle buildStyle
     ) {
 
-        static Car of(CarSpec spec, Integer modelYear) {
+        static Car of(Post post, CarSpec spec) {
             return new Car(
+                    post.getOwnedCarId(),
                     spec.carModelId(),
-                    spec.manufacturer(),
                     spec.modelName(),
-                    spec.generationId(),
                     spec.generationCode(),
-                    spec.trimId(),
                     spec.trimName(),
-                    modelYear
+                    post.getModelYear(),
+                    post.getBuildStyle()
             );
         }
     }
 
     public record Image(
-            Long imageId,
+            Long id,
             String url,
-            Integer width,
-            Integer height,
+            int width,
+            int height,
             List<Tag> tags
     ) {
 
-        static Image of(PostImage image, Map<Long, PartInfo> parts) {
+        static Image of(PostImage image, List<PostPart> parts) {
             return new Image(
-                    image.getUploadedImageId(),
+                    image.getId(),
                     image.getUrl(),
                     image.getWidth(),
                     image.getHeight(),
-                    image.getTags().stream()
-                            .filter(tag -> parts.containsKey(tag.getPartId()))
-                            .map(tag -> Tag.of(tag, parts.get(tag.getPartId())))
+                    parts.stream()
+                            .flatMap(part -> part.getTags().stream())
+                            .filter(tag -> tag.getPostImage().getId().equals(image.getId()))
+                            .map(tag -> new Tag(tag.getPostPart().getId(), tag.getX(), tag.getY()))
                             .toList()
             );
         }
     }
 
     public record Tag(
-            Long partId,
-            String partName,
-            String brandName,
-            PartCategory category,
+            Long postPartId,
             double x,
             double y
     ) {
+    }
 
-        static Tag of(PostPartTag tag, PartInfo part) {
-            return new Tag(part.id(), part.name(), part.brandName(), part.category(), tag.getX(), tag.getY());
+    public record Part(
+            Long postPartId,
+            Long partId,
+            PartCategory category,
+            String brandName,
+            String partName,
+            long wishCount,
+            boolean wished
+    ) {
+
+        static Part of(PostPart part, PartInfo info, long wishCount, boolean wished) {
+            return new Part(
+                    part.getId(),
+                    part.getPartId(),
+                    part.getCategory(),
+                    info != null ? info.brandName() : null,
+                    info != null ? info.name() : null,
+                    wishCount,
+                    wished
+            );
         }
     }
 
-    public record PartGroup(
-            PartCategory category,
-            List<PartItem> parts
-    ) {
-    }
-
-    public record PartItem(
-            Long partId,
-            String name,
-            String brandName,
-            boolean wishlisted
-    ) {
-    }
-
     /**
-     * 피드 2열 벽돌형 카드. 썸네일 크기를 모르면(HEIC 등) width, height 가 null 이다.
+     * 피드 2열 벽돌형 카드. 썸네일 크기로 카드 높이를 정한다. hidden 은 내 게시물 목록에서 숨김 처리된 게시물만 true.
      */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Card(
-            Long id,
+            Long postId,
             String thumbnailUrl,
-            Integer thumbnailWidth,
-            Integer thumbnailHeight,
-            Long carModelId,
+            Integer thumbWidth,
+            Integer thumbHeight,
             String carModelName,
-            Integer modelYear,
-            BuildDirection buildDirection,
+            int year,
             int partCount,
-            PostStatus status
+            Boolean hidden
     ) {
 
         public static Card of(Post post, String carModelName) {
@@ -213,12 +197,10 @@ public record PostResponse(
                     thumbnail != null ? thumbnail.getUrl() : null,
                     thumbnail != null ? thumbnail.getWidth() : null,
                     thumbnail != null ? thumbnail.getHeight() : null,
-                    post.getCarModelId(),
                     carModelName,
                     post.getModelYear(),
-                    post.getBuildDirection(),
                     post.getPartCount(),
-                    post.getStatus()
+                    post.isPublic() ? null : true
             );
         }
     }

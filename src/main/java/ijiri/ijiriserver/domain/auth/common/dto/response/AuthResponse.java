@@ -4,7 +4,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 
 /**
- * auth 도메인의 모든 API 응답. API 마다 필요한 필드만 채우고 null 필드는 JSON 에서 빠진다.
+ * auth 도메인의 모든 API 응답. 로그인·가입은 토큰 + isNewMember + member, 갱신은 토큰,
+ * 인증 코드 확인은 verificationToken 만 채운다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record AuthResponse(
@@ -13,31 +14,18 @@ public record AuthResponse(
         Long accessTokenExpiresIn,
         Boolean isNewMember,
         MemberResponse member,
-        Long verificationCodeExpiresIn,
-        String message
+        String verificationToken
 ) {
 
     public static AuthResponse tokens(String accessToken, String refreshToken, long accessTokenExpiresIn) {
-        return new AuthResponse(accessToken, refreshToken, accessTokenExpiresIn, null, null, null, null);
+        return new AuthResponse(accessToken, refreshToken, accessTokenExpiresIn, null, null, null);
     }
 
-    public static AuthResponse verificationCodeSent(long verificationCodeExpiresIn) {
-        return new AuthResponse(null, null, null, null, null, verificationCodeExpiresIn, null);
-    }
-
-    public static AuthResponse message(String message) {
-        return new AuthResponse(null, null, null, null, null, null, message);
+    public static AuthResponse verified(String verificationToken) {
+        return new AuthResponse(null, null, null, null, null, verificationToken);
     }
 
     public AuthResponse withSignIn(boolean isNewMember, MemberResponse member) {
-        return new AuthResponse(
-                accessToken,
-                refreshToken,
-                accessTokenExpiresIn,
-                isNewMember,
-                member,
-                null,
-                null
-        );
+        return new AuthResponse(accessToken, refreshToken, accessTokenExpiresIn, isNewMember, member, null);
     }
 }

@@ -47,7 +47,7 @@ public class OAuthServiceImpl implements OAuthService {
                 .orElseThrow(() -> new CustomException(AuthStatusCode.UNSUPPORTED_PROVIDER));
         MemberRegisterResult result = register(verifier.verify(request.token()));
         Member member = result.member();
-        return tokenService.issue(member).withSignIn(result.isNewMember(), MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(result.isNewMember(), MemberResponse.summary(member));
     }
 
     // 같은 계정의 첫 로그인이 동시에 들어오면 한쪽이 유니크 제약에 걸린다.

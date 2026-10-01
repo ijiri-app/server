@@ -30,10 +30,10 @@ class EmailVerificationTest {
     }
 
     @Test
-    void 인증_완료되면_만료_시각이_가입_기한으로_늘어난다() {
+    void 인증_완료되면_만료_시각이_verificationToken_기한으로_바뀐다() {
         EmailVerification verification = newVerification();
 
-        verification.markVerified(NOW.plusMinutes(1), NOW.plusMinutes(31));
+        verification.markVerified(NOW.plusMinutes(1), "token-hash", NOW.plusMinutes(11));
 
         assertThat(verification.isVerified()).isTrue();
         assertThat(verification.isExpired(NOW.plusMinutes(10))).isFalse();
@@ -43,7 +43,7 @@ class EmailVerificationTest {
     void 재발송하면_인증_상태와_시도_횟수를_초기화한다() {
         EmailVerification verification = newVerification();
         verification.matches("000000");
-        verification.markVerified(NOW, NOW.plusMinutes(30));
+        verification.markVerified(NOW, "token-hash", NOW.plusMinutes(10));
 
         assertThat(verification.canResend(NOW.plusSeconds(59), 60)).isFalse();
         assertThat(verification.canResend(NOW.plusSeconds(60), 60)).isTrue();

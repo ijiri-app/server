@@ -8,5 +8,10 @@ public interface InterestCarService {
 
     InterestCarResponse getAll(Long memberId);
 
-    InterestCarResponse replaceAll(Long memberId, List<Long> carModelIds);
+    void replaceAll(Long memberId, List<Long> carModelIds);
+
+    /**
+     * 피드 탭 순서대로. 없으면 빈 목록.
+     */
+    List<Long> getCarModelIds(Long memberId);
 }

@@ -32,7 +32,8 @@ public class OwnedCarController {
     private final OwnedCarService ownedCarService;
 
     @Operation(
-            summary = "보유 차량 목록"
+            summary = "보유 차량 목록",
+            description = "지금 타는 차(OWNED) 다음 이전 차량(PAST). 차량별 게시물 수 포함"
     )
     @GetMapping
     public BaseResponse<OwnedCarResponse> getAll(
@@ -43,7 +44,7 @@ public class OwnedCarController {
 
     @Operation(
             summary = "보유 차량 등록",
-            description = "모델·세대·트림(선택), 연식, 빌드 방향. 최대 10대"
+            description = "트림, 연식(세대 판매 기간 안), 빌드 방향, 별칭. 최대 10대"
     )
     @ResponseStatus(HttpStatus.CREATED)
     @PostMapping
@@ -59,32 +60,28 @@ public class OwnedCarController {
 
     @Operation(
             summary = "보유 차량 수정",
-            description = "모든 항목을 요청 값으로 바꾼다"
+            description = "연식, 빌드 방향, 별칭, 상태(OWNED/PAST). 보낸 필드만 바뀐다. 204"
     )
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PatchMapping("/{ownedCarId}")
-    public BaseResponse<OwnedCarResponse> update(
+    public void update(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long ownedCarId,
             @Valid @RequestBody OwnedCarUpdateRequest request
     ) {
-        return BaseResponse.of(
-                OwnedCarStatusCode.UPDATE_SUCCESS,
-                ownedCarService.update(Long.valueOf(memberId), ownedCarId, request)
-        );
+        ownedCarService.update(Long.valueOf(memberId), ownedCarId, request);
     }
 
     @Operation(
             summary = "보유 차량 삭제",
-            description = "이미 올린 게시물의 차량 정보는 그대로 남는다"
+            description = "게시물이 연결된 차량은 삭제 대신 이전 차량(PAST)으로 바뀐다. 204"
     )
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @DeleteMapping("/{ownedCarId}")
-    public BaseResponse<OwnedCarResponse> delete(
+    public void delete(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long ownedCarId
     ) {
-        return BaseResponse.of(
-                OwnedCarStatusCode.DELETE_SUCCESS,
-                ownedCarService.delete(Long.valueOf(memberId), ownedCarId)
-        );
+        ownedCarService.delete(Long.valueOf(memberId), ownedCarId);
     }
 }

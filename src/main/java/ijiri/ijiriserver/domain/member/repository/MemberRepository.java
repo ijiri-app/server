@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.member.repository;
 
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
+import org.springframework.data.domain.Limit;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,6 +23,12 @@ public interface MemberRepository extends JpaRepository<Member, Long> {
 
     boolean existsByProviderAndProviderMemberId(Provider provider, String providerMemberId);
 
-    @Query("SELECT m.id FROM Member m WHERE m.deletedAt < :cutoff")
-    List<Long> findIdsWithdrawnBefore(@Param("cutoff") LocalDateTime cutoff);
+    boolean existsByNickname(String nickname);
+
+    @Query("SELECT m.id FROM Member m WHERE m.deletedAt < :cutoff AND m.id > :afterId ORDER BY m.id")
+    List<Long> findIdsWithdrawnBefore(
+            @Param("cutoff") LocalDateTime cutoff,
+            @Param("afterId") Long afterId,
+            Limit limit
+    );
 }

@@ -18,8 +18,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 부품. 같은 브랜드(브랜드 없음 포함) 안에서 normalizedName 이 같으면 같은 부품으로 본다.
- * 분류는 처음 등록할 때 정한다.
+ * 부품. 같은 브랜드(브랜드 없음 포함) 안에서 normalizedName(대소문자·공백·하이픈 무시)이 같으면 같은 부품으로 본다.
+ * 그 밖의 비슷한 이름은 자동으로 합치지 않는다 (TE37 SAGA 18" 과 TE37 SONIC 19" 는 다른 부품).
+ * 분류는 처음 등록할 때 정한다. useCount 는 이 부품이 달린 게시물 수.
  */
 @Entity
 @Getter
@@ -33,7 +34,7 @@ import lombok.NoArgsConstructor;
                 columnNames = {"brand_id", "normalized_name"}
         ),
         // 마이그레이션에서 trigram(GIN) 인덱스로 만든다
-        indexes = @Index(name = "idx_part_name", columnList = "name")
+        indexes = @Index(name = "idx_part_normalized_name", columnList = "normalized_name")
 )
 public class Part extends BaseTimeEntity {
 
@@ -54,4 +55,11 @@ public class Part extends BaseTimeEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "category", nullable = false, length = 20)
     private PartCategory category;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private PartStatus status;
+
+    @Column(name = "use_count", nullable = false)
+    private int useCount;
 }

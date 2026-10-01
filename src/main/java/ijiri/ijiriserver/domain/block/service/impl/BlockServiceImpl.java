@@ -33,7 +33,7 @@ public class BlockServiceImpl implements BlockService {
     // 이미 차단한 회원이면 그대로 성공으로 응답한다
     @Override
     @Transactional
-    public BlockResponse block(Long blockerId, Long targetId) {
+    public void block(Long blockerId, Long targetId) {
         if (blockerId.equals(targetId)) {
             throw new CustomException(BlockStatusCode.CANNOT_BLOCK_SELF);
         }
@@ -46,15 +46,13 @@ public class BlockServiceImpl implements BlockService {
                     .build()
             );
         }
-        return BlockResponse.message(BlockStatusCode.BLOCK_SUCCESS.getMessage());
     }
 
     @Override
     @Transactional
-    public BlockResponse unblock(Long blockerId, Long targetId) {
+    public void unblock(Long blockerId, Long targetId) {
         memberBlockRepository.findByBlockerIdAndBlockedId(blockerId, targetId)
                 .ifPresent(memberBlockRepository::delete);
-        return BlockResponse.message(BlockStatusCode.UNBLOCK_SUCCESS.getMessage());
     }
 
     // 차단한 뒤 탈퇴한 회원은 목록에서 뺀다
@@ -65,7 +63,7 @@ public class BlockServiceImpl implements BlockService {
                 .toList();
         Map<Long, Member> members = memberService.getActiveMembers(blockedIds).stream()
                 .collect(Collectors.toMap(Member::getId, Function.identity()));
-        return BlockResponse.list(blockedIds.stream()
+        return new BlockResponse(blockedIds.stream()
                 .map(members::get)
                 .filter(Objects::nonNull)
                 .map(member -> new BlockResponse.BlockedMember(

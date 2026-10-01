@@ -9,12 +9,15 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PostStatusCode implements StatusCode {
 
-    CREATE_SUCCESS(HttpStatus.CREATED, "POST201", "게시물이 등록되었습니다."),
-    UPDATE_SUCCESS(HttpStatus.OK, "POST2001", "게시물이 수정되었습니다."),
-    DELETE_SUCCESS(HttpStatus.OK, "POST2002", "게시물이 삭제되었습니다."),
-    DUPLICATE_IMAGE(HttpStatus.BAD_REQUEST, "POST4001", "같은 사진을 두 번 넣을 수 없습니다."),
-    NOT_POST_AUTHOR(HttpStatus.FORBIDDEN, "POST403", "내 게시물만 수정·삭제할 수 있습니다."),
-    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "POST404", "게시물을 찾을 수 없습니다.");
+    CREATE_SUCCESS(HttpStatus.CREATED, "POST_CREATED", "게시물이 등록되었습니다."),
+    INVALID_PART_REF(
+            HttpStatus.BAD_REQUEST,
+            "INVALID_PART_REF",
+            "부품 ref 가 겹치거나, 태그가 없는 부품 ref·이 게시물에 없는 사진을 가리킵니다."
+    ),
+    MISSING_IMAGE_SIZE(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "사진의 width, height 가 필요합니다."),
+    NOT_POST_AUTHOR(HttpStatus.FORBIDDEN, "FORBIDDEN", "내 게시물만 수정·삭제할 수 있습니다."),
+    POST_NOT_FOUND(HttpStatus.NOT_FOUND, "NOT_FOUND", "게시물을 찾을 수 없습니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

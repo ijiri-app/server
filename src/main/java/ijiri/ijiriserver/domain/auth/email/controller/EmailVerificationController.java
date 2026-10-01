@@ -13,9 +13,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
@@ -37,27 +39,26 @@ public class EmailVerificationController {
 
     @Operation(
             summary = "인증 코드 발송",
-            description = "숫자 6자리 코드를 발송. 5분간 유효. 재발송은 60초 후, IP 당 시간당 10회. "
-                    + "purpose = SIGNUP(기본) / RESET_PASSWORD. 가입 여부와 무관하게 같은 응답을 준다"
+            description = "숫자 6자리, 5분 유효. 같은 이메일 1분에 1번, IP 당 시간당 10회(TOO_MANY_REQUESTS). 204. "
+                    + "SIGNUP 인데 이미 가입된 이메일이면 EMAIL_ALREADY_EXISTS. "
+                    + "RESET_PASSWORD 는 가입되지 않은 이메일이어도 204 를 주고 메일만 보내지 않는다"
     )
-    @PostMapping("/verification-code")
-    public BaseResponse<AuthResponse> sendCode(
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PostMapping("/send-code")
+    public void sendCode(
             @Valid @RequestBody VerificationCodeSendRequest request,
             HttpServletRequest httpRequest
     ) {
         rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
-        return BaseResponse.of(
-                AuthStatusCode.VERIFICATION_CODE_SENT,
-                emailVerificationService.sendCode(request.email(), request.purpose())
-        );
+        emailVerificationService.sendCode(request.email(), request.purpose());
     }
 
     @Operation(
             summary = "인증 코드 확인",
-            description = "코드가 맞으면 이메일 인증 완료. 이후 30분 안에 회원가입(비밀번호 재설정)해야 한다. "
-                    + "코드당 5회까지 시도"
+            description = "맞으면 verificationToken(10분, 1회용)을 준다. 틀리면 INVALID_VERIFICATION_CODE + "
+                    + "remainingAttempts. 5번 틀리면 코드 무효"
     )
-    @PostMapping("/verification-code/verify")
+    @PostMapping("/verify-code")
     public BaseResponse<AuthResponse> verifyCode(@Valid @RequestBody VerificationCodeConfirmRequest request) {
         return BaseResponse.of(
                 AuthStatusCode.EMAIL_VERIFIED,

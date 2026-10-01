@@ -17,7 +17,7 @@ import lombok.NoArgsConstructor;
 
 /**
  * 부품 브랜드. 사용자가 게시물을 올리며 새로 입력할 수 있다.
- * normalizedName(소문자, 공백 제거)이 같으면 같은 브랜드로 본다.
+ * normalizedName(대소문자·공백·하이픈 무시)이 같으면 같은 브랜드로 본다.
  */
 @Entity
 @Getter
@@ -28,7 +28,7 @@ import lombok.NoArgsConstructor;
         name = "brand",
         uniqueConstraints = @UniqueConstraint(name = "uk_brand_normalized_name", columnNames = "normalized_name"),
         // 마이그레이션에서 trigram(GIN) 인덱스로 만든다
-        indexes = @Index(name = "idx_brand_name", columnList = "name")
+        indexes = @Index(name = "idx_brand_normalized_name", columnList = "normalized_name")
 )
 public class Brand extends BaseTimeEntity {
 

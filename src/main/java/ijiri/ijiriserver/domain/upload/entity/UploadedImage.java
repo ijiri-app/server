@@ -3,6 +3,8 @@ package ijiri.ijiriserver.domain.upload.entity;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -16,8 +18,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회원이 올린 사진. 게시물이나 프로필에 쓰이면 attached 가 되고,
- * 하루가 지나도록 쓰이지 않은 사진은 UploadedImageCleanupScheduler 가 파일까지 지운다.
+ * 업로드 URL 을 발급한 사진 키. 앱이 파일을 올리면 UPLOADED, 게시물·프로필에 쓰이면 ATTACHED 가 되고,
+ * 10분 안에 연결되지 않으면 UploadedImageCleanupScheduler 가 파일까지 지운다.
  */
 @Entity
 @Getter
@@ -26,10 +28,10 @@ import lombok.NoArgsConstructor;
 @Builder
 @Table(
         name = "uploaded_image",
-        uniqueConstraints = @UniqueConstraint(name = "uk_uploaded_image_storage_key", columnNames = "storage_key"),
+        uniqueConstraints = @UniqueConstraint(name = "uk_uploaded_image_image_key", columnNames = "image_key"),
         indexes = {
                 @Index(name = "idx_uploaded_image_member_id", columnList = "member_id"),
-                @Index(name = "idx_uploaded_image_attached_created_at", columnList = "attached, created_at")
+                @Index(name = "idx_uploaded_image_status_created_at", columnList = "status, created_at")
         }
 )
 public class UploadedImage extends BaseTimeEntity {
@@ -41,23 +43,25 @@ public class UploadedImage extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(name = "storage_key", nullable = false, length = 100, updatable = false)
-    private String storageKey;
+    @Column(name = "image_key", nullable = false, length = 100, updatable = false)
+    private String imageKey;
 
-    @Column(name = "url", nullable = false, length = 500, updatable = false)
-    private String url;
+    @Column(name = "content_type", nullable = false, length = 30, updatable = false)
+    private String contentType;
 
-    // 서버가 읽지 못하는 형식(HEIC, WebP)이면 null
-    @Column(name = "width")
-    private Integer width;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private UploadStatus status;
 
-    @Column(name = "height")
-    private Integer height;
-
-    @Column(name = "attached", nullable = false)
-    private boolean attached;
+    public void markUploaded() {
+        this.status = UploadStatus.UPLOADED;
+    }
 
     public void attach() {
-        this.attached = true;
+        this.status = UploadStatus.ATTACHED;
+    }
+
+    public boolean isUploaded() {
+        return status == UploadStatus.UPLOADED;
     }
 }

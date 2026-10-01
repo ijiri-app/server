@@ -32,6 +32,12 @@ class SignupRequestTest {
     }
 
     private SignupRequest request(String password, String nickname) {
-        return new SignupRequest("user@ijiri.com", password, nickname);
+        return new SignupRequest(
+                "user@ijiri.com",
+                password,
+                nickname,
+                "vt_token",
+                new SignupRequest.Agreements(true, true, true)
+        );
     }
 }

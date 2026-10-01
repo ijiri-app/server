@@ -2,61 +2,56 @@ package ijiri.ijiriserver.domain.ownedcar.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import ijiri.ijiriserver.domain.carmodel.dto.CarSpec;
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 
 import java.util.List;
 
 /**
- * ownedcar 도메인의 모든 API 응답. 목록은 cars, 등록/수정은 car, 삭제는 message 만 채운다.
+ * ownedcar 도메인의 모든 API 응답. 목록은 items, 등록은 id 만 채운다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record OwnedCarResponse(
-        List<Car> cars,
-        Car car,
-        String message
+        Long id,
+        List<Item> items
 ) {
 
-    public static OwnedCarResponse list(List<Car> cars) {
-        return new OwnedCarResponse(cars, null, null);
+    public static OwnedCarResponse created(Long id) {
+        return new OwnedCarResponse(id, null);
     }
 
-    public static OwnedCarResponse single(Car car) {
-        return new OwnedCarResponse(null, car, null);
+    public static OwnedCarResponse list(List<Item> items) {
+        return new OwnedCarResponse(null, items);
     }
 
-    public static OwnedCarResponse message(String message) {
-        return new OwnedCarResponse(null, null, message);
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Car(
+    public record Item(
             Long id,
             Long carModelId,
-            String manufacturer,
-            String modelName,
-            Long carGenerationId,
+            String carModelName,
             String generationCode,
-            String generationName,
-            Long carTrimId,
+            Long trimId,
             String trimName,
-            Integer modelYear,
-            BuildDirection buildDirection
+            int year,
+            BuildStyle buildStyle,
+            String nickname,
+            OwnedCarStatus status,
+            long postCount
     ) {
 
-        public static Car of(OwnedCar car, CarSpec spec) {
-            return new Car(
+        public static Item of(OwnedCar car, CarSpec spec, long postCount) {
+            return new Item(
                     car.getId(),
                     spec.carModelId(),
-                    spec.manufacturer(),
                     spec.modelName(),
-                    spec.generationId(),
                     spec.generationCode(),
-                    spec.generationName(),
                     spec.trimId(),
                     spec.trimName(),
                     car.getModelYear(),
-                    car.getBuildDirection()
+                    car.getBuildStyle(),
+                    car.getNickname(),
+                    car.getStatus(),
+                    postCount
             );
         }
     }

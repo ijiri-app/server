@@ -77,18 +77,16 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
     // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
     @Transactional
-    public AuthResponse signOut(Long memberId) {
+    public void signOut(Long memberId) {
         refreshTokenRepository.deleteAllByMemberId(memberId);
-        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
     }
 
     // access token 이 만료돼도 로그아웃할 수 있게 refresh token 으로 세션을 지운다.
     // 저장된 토큰과 해시가 같아야만 지워지므로 서명·만료 검사는 필요 없고, 없는 토큰이어도 같은 응답을 준다
     @Override
     @Transactional
-    public AuthResponse signOutByRefreshToken(String refreshToken) {
+    public void signOutByRefreshToken(String refreshToken) {
         refreshTokenRepository.deleteByTokenHash(RefreshToken.hash(refreshToken));
-        return AuthResponse.message(AuthStatusCode.SIGNOUT_SUCCESS.getMessage());
     }
 
     @EventListener

@@ -1,53 +1,53 @@
 package ijiri.ijiriserver.domain.wishlist.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import ijiri.ijiriserver.domain.part.dto.PartInfo;
 import ijiri.ijiriserver.domain.part.entity.PartCategory;
+import ijiri.ijiriserver.domain.post.dto.PostPartSummary;
 import ijiri.ijiriserver.domain.wishlist.entity.WishlistItem;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * wishlist 도메인의 모든 API 응답. 목록은 items(+nextCursor), 담기는 item, 빼기는 message 만 채운다.
+ * wishlist 도메인의 모든 API 응답. 목록은 items + nextCursor, 담기는 id 만 채운다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record WishlistResponse(
+        Long id,
         List<Item> items,
-        Long nextCursor,
-        Item item,
-        String message
+        String nextCursor
 ) {
 
+    public static WishlistResponse added(Long id) {
+        return new WishlistResponse(id, null, null);
+    }
+
     public static WishlistResponse list(List<Item> items, Long nextCursor) {
-        return new WishlistResponse(items, nextCursor, null, null);
+        return new WishlistResponse(null, items, nextCursor != null ? String.valueOf(nextCursor) : null);
     }
 
-    public static WishlistResponse single(Item item) {
-        return new WishlistResponse(null, null, item, null);
-    }
-
-    public static WishlistResponse message(String message) {
-        return new WishlistResponse(null, null, null, message);
-    }
-
-    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Item(
             Long id,
-            Long partId,
-            String partName,
+            Long postId,
+            Long postPartId,
+            String thumbnailUrl,
             PartCategory category,
             String brandName,
+            String partName,
+            String carModelName,
             LocalDateTime createdAt
     ) {
 
-        public static Item of(WishlistItem item, PartInfo part) {
+        public static Item of(WishlistItem item, PostPartSummary part) {
             return new Item(
                     item.getId(),
-                    part.id(),
-                    part.name(),
+                    part.postId(),
+                    part.postPartId(),
+                    part.thumbnailUrl(),
                     part.category(),
                     part.brandName(),
+                    part.partName(),
+                    part.carModelName(),
                     item.getCreatedAt()
             );
         }

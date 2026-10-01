@@ -2,15 +2,18 @@ package ijiri.ijiriserver.domain.auth.email.dto.request;
 
 import ijiri.ijiriserver.global.validation.MaxUtf8Bytes;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.Locale;
 
 /**
- * 인증 코드 확인(/auth/email/verification-code/verify)을 마친 이메일로만 가입할 수 있다.
+ * 인증 코드 확인(/auth/email/verify-code)으로 받은 verificationToken 이 있어야 가입할 수 있다.
  */
 public record SignupRequest(
         @Schema(description = "인증을 마친 이메일 (로그인 ID)", example = "user@ijiri.com")
@@ -24,8 +27,14 @@ public record SignupRequest(
         @MaxUtf8Bytes(72)
         String password,
 
-        @Schema(description = "닉네임 (2~12자)", example = "이지리오너")
-        @NotBlank @Size(min = 2, max = 12) String nickname
+        @Schema(description = "닉네임 (2~12자, 중복 불가)", example = "이지리")
+        @NotBlank @Size(min = 2, max = 12) String nickname,
+
+        @Schema(description = "인증 코드 확인 응답의 verificationToken")
+        @NotBlank String verificationToken,
+
+        @Schema(description = "필수 약관 동의 3개 (모두 true)")
+        @NotNull @Valid Agreements agreements
 ) {
 
     // 비밀번호 재설정도 같은 규칙을 쓴다
@@ -35,5 +44,12 @@ public record SignupRequest(
     public SignupRequest {
         email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
         nickname = nickname == null ? null : nickname.trim();
+    }
+
+    public record Agreements(
+            @Schema(description = "만 14세 이상") @AssertTrue boolean age14,
+            @Schema(description = "이용약관") @AssertTrue boolean terms,
+            @Schema(description = "개인정보 수집·이용") @AssertTrue boolean privacy
+    ) {
     }
 }

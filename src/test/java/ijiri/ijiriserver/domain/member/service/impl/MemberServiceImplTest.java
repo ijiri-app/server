@@ -8,7 +8,10 @@ import ijiri.ijiriserver.domain.member.entity.Role;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.repository.MemberRepository;
+import ijiri.ijiriserver.domain.member.service.MemberPostCounter;
+import ijiri.ijiriserver.domain.member.service.MemberWishCounter;
 import ijiri.ijiriserver.global.exception.CustomException;
+import ijiri.ijiriserver.global.storage.ImageUrlResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -34,6 +37,9 @@ class MemberServiceImplTest {
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
     private final MemberServiceImpl memberService = new MemberServiceImpl(
             memberRepository,
+            mock(MemberPostCounter.class),
+            mock(MemberWishCounter.class),
+            new ImageUrlResolver("http://localhost"),
             eventPublisher,
             Clock.fixed(NOW, ZoneOffset.UTC)
     );

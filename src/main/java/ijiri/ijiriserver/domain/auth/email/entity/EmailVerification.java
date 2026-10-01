@@ -16,11 +16,12 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 
 /**
  * 이메일 + 용도(가입, 비밀번호 재설정)당 한 줄. 코드 재발송 시 같은 행을 갱신한다.
- * 코드가 맞으면 인증 완료(verifiedAt)로 바꾸고 만료 시각을 가입(재설정) 가능 기한으로 늘린다.
+ * 코드가 맞으면 verificationToken 을 발급해 해시만 저장하고, 만료 시각을 토큰 유효 기한으로 바꾼다.
  * 가입(재설정)에 성공하면 삭제해 한 번의 인증을 한 번만 쓸 수 있게 한다.
  */
 @Entity
@@ -54,7 +55,7 @@ public class EmailVerification extends BaseTimeEntity {
     @Column(name = "sent_at", nullable = false)
     private LocalDateTime sentAt;
 
-    // 코드 확인 전에는 코드 만료 시각, 확인 후에는 가입 가능 기한
+    // 코드 확인 전에는 코드 만료 시각, 확인 후에는 verificationToken 만료 시각
     @Column(name = "expires_at", nullable = false)
     private LocalDateTime expiresAt;
 
@@ -64,6 +65,10 @@ public class EmailVerification extends BaseTimeEntity {
     // null 이면 아직 코드를 확인하지 않은 상태
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
+
+    // 원문은 응답으로만 내보내고 SHA-256 해시만 저장한다
+    @Column(name = "verification_token_hash", length = 64)
+    private String verificationTokenHash;
 
     public static EmailVerification of(
             String email,
@@ -87,11 +92,21 @@ public class EmailVerification extends BaseTimeEntity {
         this.expiresAt = expiresAt;
         this.attemptCount = 0;
         this.verifiedAt = null;
+        this.verificationTokenHash = null;
     }
 
-    public void markVerified(LocalDateTime now, LocalDateTime signupDeadline) {
+    public void markVerified(LocalDateTime now, String verificationTokenHash, LocalDateTime tokenExpiresAt) {
         this.verifiedAt = now;
-        this.expiresAt = signupDeadline;
+        this.verificationTokenHash = verificationTokenHash;
+        this.expiresAt = tokenExpiresAt;
+    }
+
+    public long secondsUntilResend(LocalDateTime now, long cooldownSeconds) {
+        return Math.max(1, Duration.between(now, sentAt.plusSeconds(cooldownSeconds)).toSeconds());
+    }
+
+    public int remainingAttempts(int maxAttempts) {
+        return Math.max(0, maxAttempts - attemptCount);
     }
 
     public boolean isVerified() {

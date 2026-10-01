@@ -15,13 +15,12 @@ public record VerificationCodeConfirmRequest(
         @Schema(description = "메일로 받은 숫자 6자리 인증 코드", example = "123456")
         @NotBlank @Pattern(regexp = "\\d{6}") String code,
 
-        @Schema(description = "발송 요청과 같은 용도. 비우면 SIGNUP", example = "SIGNUP")
+        @Schema(description = "발송 요청의 용도 (선택). 비우면 이 이메일로 가장 최근에 보낸 코드와 비교", example = "SIGNUP")
         VerificationPurpose purpose
 ) {
 
     // 발송 요청과 같은 형태로 비교되도록 소문자로 통일
     public VerificationCodeConfirmRequest {
         email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
-        purpose = purpose == null ? VerificationPurpose.SIGNUP : purpose;
     }
 }

@@ -23,40 +23,42 @@ public class PartController {
     private final PartService partService;
 
     @Operation(
-            summary = "부품 자동완성",
-            description = "부품 태그 입력용. 부품명·브랜드명 부분 일치, 그다음 부품명 유사도(오타 허용) 순으로 20개"
+            summary = "부품 검색",
+            description = "부품명·브랜드명·별칭 부분 일치(대소문자·띄어쓰기·하이픈 무시). "
+                    + "carModelId 를 주면 그 차종에 자주 달린 부품이 위로 온다"
     )
-    @GetMapping("/parts/suggest")
-    public BaseResponse<PartResponse> suggest(
-            @RequestParam @NotBlank @Size(max = 100) String keyword,
-            @RequestParam(required = false) PartCategory category
+    @GetMapping("/parts")
+    public BaseResponse<PartResponse> search(
+            @RequestParam(required = false) @Size(max = 100) String q,
+            @RequestParam(required = false) PartCategory category,
+            @RequestParam(required = false) Long carModelId,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(partService.suggest(keyword, category));
+        return BaseResponse.ok(partService.search(q, category, carModelId, size));
     }
 
     @Operation(
-            summary = "부품 목록",
-            description = "부품명, 분류, 브랜드로 거른다. 최신 등록순, cursor 는 이전 응답의 nextCursor"
+            summary = "부품 후보 추천",
+            description = "직접 입력한 이름과 같은 부품일 수 있는 후보 최대 3개와 score(0~1). "
+                    + "고르면 기존 partId 로, 안 고르면 새 부품(확인 대기)으로 올린다. 자동으로 합치지 않는다"
     )
-    @GetMapping("/parts")
-    public BaseResponse<PartResponse> getParts(
-            @RequestParam(required = false) @Size(max = 100) String keyword,
+    @GetMapping("/parts/suggest")
+    public BaseResponse<PartResponse> suggest(
+            @RequestParam @NotBlank @Size(max = 100) String q,
             @RequestParam(required = false) PartCategory category,
-            @RequestParam(required = false) Long brandId,
-            @RequestParam(required = false) Long cursor,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
+            @RequestParam(required = false) Long carModelId
     ) {
-        return BaseResponse.ok(partService.getParts(keyword, category, brandId, cursor, size));
+        return BaseResponse.ok(partService.suggest(q, category, carModelId));
     }
 
     @Operation(
             summary = "브랜드 검색",
-            description = "브랜드명 부분 일치, 이름순 30개. keyword 를 비우면 이름순 앞에서부터"
+            description = "브랜드명 부분 일치(대소문자·띄어쓰기·하이픈 무시), 이름순 30개"
     )
     @GetMapping("/brands")
     public BaseResponse<PartResponse> getBrands(
-            @RequestParam(required = false) @Size(max = 50) String keyword
+            @RequestParam(required = false) @Size(max = 50) String q
     ) {
-        return BaseResponse.ok(partService.getBrands(keyword));
+        return BaseResponse.ok(partService.getBrands(q));
     }
 }

@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.post.controller;
 
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.domain.post.dto.response.PostResponse;
 import ijiri.ijiriserver.domain.post.service.PostService;
 import ijiri.ijiriserver.global.response.BaseResponse;
@@ -28,23 +28,25 @@ public class FeedController {
 
     @Operation(
             summary = "피드",
-            description = "최신순 카드 목록(무한 스크롤: cursor 에 이전 응답의 nextCursor). "
-                    + "관심 차종 탭: '모두'는 관심 차종 ID 전체, 차종 탭은 그 ID 하나를 carModelIds 로 보낸다(비우면 전체). "
-                    + "buildDirection 은 빌드 방향 칩. 로그인하면 차단 관계인 회원의 게시물을 뺀다"
+            description = "최신순 카드(썸네일 크기 포함). 차종 탭은 carModelId, 비로그인 '모두' 탭은 기기에 저장한 "
+                    + "carModelIds(쉼표 구분). 로그인 상태에서 둘 다 없으면 내 관심 차종 전체, 관심 차종도 없으면 전체. "
+                    + "buildStyle 은 빌드 방향 칩. 차단 관계인 회원과 숨김 게시물은 뺀다. cursor 는 이전 응답의 nextCursor"
     )
     @SecurityRequirements
     @GetMapping("/feed")
     public BaseResponse<PostResponse> getFeed(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
+            @RequestParam(required = false) Long carModelId,
             @RequestParam(required = false) @Size(max = 30) List<Long> carModelIds,
-            @RequestParam(required = false) BuildDirection buildDirection,
+            @RequestParam(required = false) BuildStyle buildStyle,
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
         return BaseResponse.ok(postService.getFeed(
                 memberId != null ? Long.valueOf(memberId) : null,
+                carModelId,
                 carModelIds != null ? carModelIds : List.of(),
-                buildDirection,
+                buildStyle,
                 cursor,
                 size
         ));

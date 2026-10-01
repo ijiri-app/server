@@ -16,6 +16,8 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
 
     Optional<EmailVerification> findByEmailAndPurpose(String email, VerificationPurpose purpose);
 
+    Optional<EmailVerification> findFirstByEmailOrderBySentAtDesc(String email);
+
     // 같은 이메일로 재발송 요청이 동시에 들어와도 재발송 대기 확인과 갱신이 한 번에 하나씩만 일어나게 한다
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT v FROM EmailVerification v WHERE v.email = :email AND v.purpose = :purpose")
@@ -28,11 +30,13 @@ public interface EmailVerificationRepository extends JpaRepository<EmailVerifica
     @Modifying
     @Query("""
             DELETE FROM EmailVerification v
-            WHERE v.email = :email AND v.purpose = :purpose AND v.verifiedAt IS NOT NULL AND v.expiresAt > :now
+            WHERE v.email = :email AND v.purpose = :purpose AND v.verificationTokenHash = :tokenHash
+              AND v.expiresAt > :now
             """)
     int deleteVerified(
             @Param("email") String email,
             @Param("purpose") VerificationPurpose purpose,
+            @Param("tokenHash") String tokenHash,
             @Param("now") LocalDateTime now
     );
 

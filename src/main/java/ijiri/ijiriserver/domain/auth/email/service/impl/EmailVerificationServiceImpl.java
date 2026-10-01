@@ -7,7 +7,9 @@ import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
 import ijiri.ijiriserver.domain.auth.email.entity.VerificationPurpose;
 import ijiri.ijiriserver.domain.auth.email.repository.EmailVerificationRepository;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
+import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -21,6 +23,8 @@ import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.Base64;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -28,12 +32,13 @@ import java.util.Optional;
 public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     private static final long CODE_VALID_MINUTES = 5;
-    // 코드 확인 후 비밀번호/닉네임(재설정은 새 비밀번호) 입력까지 허용하는 시간
-    private static final long SIGNUP_WINDOW_MINUTES = 30;
+    // 코드 확인 후 가입(재설정)까지 허용하는 시간 = verificationToken 유효 시간
+    private static final long TOKEN_VALID_MINUTES = 10;
     private static final long RESEND_COOLDOWN_SECONDS = 60;
     private static final int MAX_ATTEMPTS = 5;
     private static final int CODE_LENGTH = 6;
     private static final String CODE_CHARACTERS = "0123456789";
+    private static final String TOKEN_PREFIX = "vt_";
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String NOTICE_KEY_PREFIX = "verification:notice:";
 
@@ -44,21 +49,20 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
-    // 가입 여부와 무관하게 응답(성공/재발송 대기)을 똑같이 두어 가입 여부가 드러나지 않게 한다.
-    // 가입: 이미 가입된 이메일이면 코드 대신 안내 메일만 보낸다.
-    // 재설정: 활성 이메일 회원이 아니면 아무 메일도 보내지 않는다.
+    // 가입: 이미 가입된 이메일이면 EMAIL_ALREADY_EXISTS (화면에서 로그인으로 안내).
+    // 재설정: 가입 여부가 드러나지 않도록 활성 이메일 회원이 아니어도 같은 응답을 주고 메일만 보내지 않는다.
     // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
     @Override
-    public AuthResponse sendCode(String email, VerificationPurpose purpose) {
+    public void sendCode(String email, VerificationPurpose purpose) {
         Optional<Member> registered = memberService.findEmailMember(email);
         if (purpose == VerificationPurpose.SIGNUP && registered.isPresent()) {
-            acquireNoticeCooldown(email, purpose);
-            sendAlreadyRegisteredNotice(email, registered.get().isWithdrawn());
-            return codeSentResponse();
+            throw new CustomException(registered.get().isWithdrawn()
+                    ? MemberStatusCode.MEMBER_WITHDRAWN
+                    : MemberStatusCode.DUPLICATE_EMAIL);
         }
         if (purpose == VerificationPurpose.RESET_PASSWORD && registered.filter(m -> !m.isWithdrawn()).isEmpty()) {
-            acquireNoticeCooldown(email, purpose);
-            return codeSentResponse();
+            acquireSilentCooldown(email, purpose);
+            return;
         }
 
         String code = generateCode();
@@ -71,7 +75,6 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             emailVerificationRepository.delete(saved);
             throw e;
         }
-        return codeSentResponse();
     }
 
     // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다
@@ -80,47 +83,49 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     public AuthResponse verifyCode(String email, String code, VerificationPurpose purpose) {
         LocalDateTime now = LocalDateTime.now(clock);
         // 이 이메일로 발송된 코드가 없으면 다른 이메일의 코드를 넣은 경우도 포함해 일치하지 않는 것으로 본다
-        EmailVerification verification = emailVerificationRepository.findByEmailAndPurpose(email, purpose)
-                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_VERIFICATION_CODE));
+        EmailVerification verification = findForVerify(email, purpose)
+                .orElseThrow(() -> invalidCode(0));
 
-        if (verification.isExpired(now)) {
-            throw new CustomException(AuthStatusCode.VERIFICATION_CODE_EXPIRED);
-        }
-        if (verification.hasExceededAttempts(MAX_ATTEMPTS)) {
-            throw new CustomException(AuthStatusCode.VERIFICATION_ATTEMPTS_EXCEEDED);
+        // 이미 확인했거나, 만료됐거나, 5번 틀린 코드는 무효
+        boolean usable = !verification.isVerified()
+                && !verification.isExpired(now)
+                && !verification.hasExceededAttempts(MAX_ATTEMPTS);
+        if (!usable) {
+            throw invalidCode(0);
         }
         if (!verification.matches(code)) {
-            throw new CustomException(AuthStatusCode.INVALID_VERIFICATION_CODE);
+            throw invalidCode(verification.remainingAttempts(MAX_ATTEMPTS));
         }
-        verification.markVerified(now, now.plusMinutes(SIGNUP_WINDOW_MINUTES));
-        return AuthResponse.message(AuthStatusCode.EMAIL_VERIFIED.getMessage());
+        String token = TOKEN_PREFIX + randomToken();
+        verification.markVerified(now, RefreshToken.hash(token), now.plusMinutes(TOKEN_VALID_MINUTES));
+        return AuthResponse.verified(token);
     }
 
     @Override
     @Transactional
-    public void consumeVerified(String email, VerificationPurpose purpose) {
-        if (emailVerificationRepository.deleteVerified(email, purpose, LocalDateTime.now(clock)) == 0) {
-            throw new CustomException(AuthStatusCode.EMAIL_NOT_VERIFIED);
+    public void consumeVerified(String email, VerificationPurpose purpose, String verificationToken) {
+        int deleted = emailVerificationRepository.deleteVerified(
+                email,
+                purpose,
+                RefreshToken.hash(verificationToken),
+                LocalDateTime.now(clock)
+        );
+        if (deleted == 0) {
+            throw new CustomException(AuthStatusCode.INVALID_VERIFICATION_TOKEN);
         }
+    }
+
+    private Optional<EmailVerification> findForVerify(String email, VerificationPurpose purpose) {
+        return purpose != null
+                ? emailVerificationRepository.findByEmailAndPurpose(email, purpose)
+                : emailVerificationRepository.findFirstByEmailOrderBySentAtDesc(email);
     }
 
     // 코드를 발송하지 않는 경우에도 실제 발송과 같은 재발송 대기·같은 에러를 적용한다
-    private void acquireNoticeCooldown(String email, VerificationPurpose purpose) {
-        boolean acquired = rateLimiter.tryAcquire(
-                NOTICE_KEY_PREFIX + purpose + ":" + email,
-                1,
-                Duration.ofSeconds(RESEND_COOLDOWN_SECONDS)
-        );
-        if (!acquired) {
-            throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
-        }
-    }
-
-    private void sendAlreadyRegisteredNotice(String email, boolean withdrawn) {
-        if (withdrawn) {
-            verificationMailClient.sendWithdrawnAccount(email);
-        } else {
-            verificationMailClient.sendAlreadyRegistered(email);
+    private void acquireSilentCooldown(String email, VerificationPurpose purpose) {
+        String key = NOTICE_KEY_PREFIX + purpose + ":" + email;
+        if (!rateLimiter.tryAcquire(key, 1, Duration.ofSeconds(RESEND_COOLDOWN_SECONDS))) {
+            throw resendTooSoon(rateLimiter.retryAfterSeconds(key));
         }
     }
 
@@ -136,7 +141,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         if (existing.isPresent()) {
             EmailVerification verification = existing.get();
             if (!verification.canResend(now, RESEND_COOLDOWN_SECONDS)) {
-                throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
+                throw resendTooSoon(verification.secondsUntilResend(now, RESEND_COOLDOWN_SECONDS));
             }
             verification.resend(code, now, expiresAt);
             return verification;
@@ -146,12 +151,22 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
                     EmailVerification.of(email, purpose, code, now, expiresAt)
             );
         } catch (DataIntegrityViolationException e) {
-            throw new CustomException(AuthStatusCode.VERIFICATION_RESEND_TOO_SOON);
+            throw resendTooSoon(RESEND_COOLDOWN_SECONDS);
         }
     }
 
-    private AuthResponse codeSentResponse() {
-        return AuthResponse.verificationCodeSent(Duration.ofMinutes(CODE_VALID_MINUTES).toSeconds());
+    private CustomException invalidCode(int remainingAttempts) {
+        return new CustomException(
+                AuthStatusCode.INVALID_VERIFICATION_CODE,
+                Map.of("remainingAttempts", remainingAttempts)
+        );
+    }
+
+    private CustomException resendTooSoon(long retryAfterSeconds) {
+        return new CustomException(
+                AuthStatusCode.VERIFICATION_RESEND_TOO_SOON,
+                Map.of("retryAfterSeconds", retryAfterSeconds)
+        );
     }
 
     private String generateCode() {
@@ -160,5 +175,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
             code.append(CODE_CHARACTERS.charAt(RANDOM.nextInt(CODE_CHARACTERS.length())));
         }
         return code.toString();
+    }
+
+    private String randomToken() {
+        byte[] bytes = new byte[32];
+        RANDOM.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

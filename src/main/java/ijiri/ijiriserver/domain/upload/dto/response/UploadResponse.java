@@ -1,17 +1,15 @@
 package ijiri.ijiriserver.domain.upload.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import ijiri.ijiriserver.domain.upload.entity.UploadedImage;
+import java.util.List;
 
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public record UploadResponse(
-        Long imageId,
-        String url,
-        Integer width,
-        Integer height
+        List<Item> items
 ) {
 
-    public static UploadResponse image(UploadedImage image) {
-        return new UploadResponse(image.getId(), image.getUrl(), image.getWidth(), image.getHeight());
+    public record Item(
+            String imageKey,
+            String uploadUrl,
+            long expiresIn
+    ) {
     }
 }

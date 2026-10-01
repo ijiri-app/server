@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.upload.repository;
 
+import ijiri.ijiriserver.domain.upload.entity.UploadStatus;
 import ijiri.ijiriserver.domain.upload.entity.UploadedImage;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -10,11 +11,11 @@ import java.util.Optional;
 
 public interface UploadedImageRepository extends JpaRepository<UploadedImage, Long> {
 
-    List<UploadedImage> findAllByIdInAndMemberIdAndAttachedFalse(Collection<Long> ids, Long memberId);
+    Optional<UploadedImage> findByImageKey(String imageKey);
 
-    Optional<UploadedImage> findByMemberIdAndUrl(Long memberId, String url);
+    List<UploadedImage> findAllByImageKeyIn(Collection<String> imageKeys);
 
     List<UploadedImage> findAllByMemberId(Long memberId);
 
-    List<UploadedImage> findAllByAttachedFalseAndCreatedAtBefore(LocalDateTime cutoff);
+    List<UploadedImage> findAllByStatusNotAndCreatedAtBefore(UploadStatus status, LocalDateTime cutoff);
 }

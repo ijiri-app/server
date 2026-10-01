@@ -20,7 +20,8 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 게시물·사용자 신고. 한 회원은 같은 대상을 한 번만 신고할 수 있다.
+ * 게시물·사용자 신고. 같은 회원이 같은 대상을 다시 신고하면 한 건으로 본다.
+ * 처리 기록(누가 resolvedBy, 언제 resolvedAt, 무엇을 action)을 남긴다.
  * targetMemberId 는 신고된 사용자(게시물이면 작성자)로, 정지 처리와 영구 삭제 정리에 쓴다.
  */
 @Entity
@@ -35,7 +36,10 @@ import java.time.LocalDateTime;
                 columnNames = {"reporter_id", "target_type", "target_id"}
         ),
         indexes = {
-                @Index(name = "idx_report_status", columnList = "status"),
+                @Index(
+                        name = "idx_report_status_target_type_target_id",
+                        columnList = "status, target_type, target_id"
+                ),
                 @Index(name = "idx_report_target_member_id", columnList = "target_member_id")
         }
 )
@@ -62,7 +66,7 @@ public class Report extends BaseTimeEntity {
     @Column(name = "reason", nullable = false, length = 30, updatable = false)
     private ReportReason reason;
 
-    @Column(name = "detail", length = 500, updatable = false)
+    @Column(name = "detail", length = 300, updatable = false)
     private String detail;
 
     @Enumerated(EnumType.STRING)

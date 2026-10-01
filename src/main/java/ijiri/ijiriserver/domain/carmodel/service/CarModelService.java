@@ -1,26 +1,38 @@
 package ijiri.ijiriserver.domain.carmodel.service;
 
+import ijiri.ijiriserver.domain.carmodel.dto.CarModelInfo;
 import ijiri.ijiriserver.domain.carmodel.dto.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.dto.response.CarModelResponse;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 public interface CarModelService {
 
-    CarModelResponse getCarModels();
+    CarModelResponse getCarModels(String keyword, boolean coreOnly);
 
     CarModelResponse getCarModel(Long carModelId);
 
     /**
-     * 모든 id 가 존재하는 차종인지 확인한다. 하나라도 없으면 CARMODEL404.
+     * 모든 id 가 숨기지 않은 차종인지 확인한다. 하나라도 아니면 NOT_FOUND.
      */
     void validateCarModelsExist(Collection<Long> carModelIds);
 
     /**
-     * 세대가 모델에, 트림(선택)이 세대에 속하는지 확인하고 조합을 돌려준다. 맞지 않으면 CARMODEL4001.
+     * 트림으로 모델·세대를 정한다. 없는 트림이면 INVALID_TRIM.
      */
-    CarSpec getSpec(Long carModelId, Long generationId, Long trimId);
+    CarSpec getSpecByTrim(Long trimId);
+
+    /**
+     * 연식이 그 세대의 판매 기간 안인지 확인한다. 아니면 INVALID_MODEL_YEAR.
+     */
+    void validateModelYear(Long generationId, int year);
+
+    /**
+     * 요청 순서대로 돌려준다. 없는 id 는 빠진다.
+     */
+    List<CarModelInfo> getCarModelInfos(List<Long> carModelIds);
 
     Map<Long, String> getModelNames(Collection<Long> carModelIds);
 }

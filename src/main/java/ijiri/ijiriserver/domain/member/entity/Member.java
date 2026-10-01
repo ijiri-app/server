@@ -26,10 +26,13 @@ import java.time.LocalDateTime;
 @Builder
 @Table(
         name = "member",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_member_provider_provider_member_id",
-                columnNames = {"provider", "provider_member_id"}
-        ),
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_member_provider_provider_member_id",
+                        columnNames = {"provider", "provider_member_id"}
+                ),
+                @UniqueConstraint(name = "uk_member_nickname", columnNames = "nickname")
+        },
         indexes = @Index(name = "idx_member_deleted_at", columnList = "deleted_at")
 )
 public class Member extends BaseTimeEntity {
@@ -51,6 +54,9 @@ public class Member extends BaseTimeEntity {
 
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
+
+    @Column(name = "status_message", length = 50)
+    private String statusMessage;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "provider", nullable = false, length = 20, updatable = false)
@@ -77,9 +83,14 @@ public class Member extends BaseTimeEntity {
         this.email = null;
     }
 
-    public void updateProfile(String nickname, String profileImageUrl) {
+    public void updateProfile(String nickname, String profileImageUrl, String statusMessage) {
         this.nickname = nickname;
         this.profileImageUrl = profileImageUrl;
+        this.statusMessage = statusMessage;
+    }
+
+    public boolean isAdmin() {
+        return role == Role.ADMIN;
     }
 
     public void changePassword(String encodedPassword) {

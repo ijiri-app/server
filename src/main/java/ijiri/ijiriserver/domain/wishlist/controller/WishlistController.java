@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.wishlist.controller;
 
+import ijiri.ijiriserver.domain.wishlist.dto.WishlistAddResult;
 import ijiri.ijiriserver.domain.wishlist.dto.request.WishlistAddRequest;
 import ijiri.ijiriserver.domain.wishlist.dto.response.WishlistResponse;
 import ijiri.ijiriserver.domain.wishlist.exception.WishlistStatusCode;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,38 +34,38 @@ public class WishlistController {
 
     @Operation(
             summary = "부품 담기",
-            description = "이미 담긴 부품이면 기존 항목을 그대로 돌려준다"
+            description = "게시물 부품(postPartId)을 담는다. 새로 담으면 201, 이미 담겨 있으면 200 과 같은 id. "
+                    + "숨김·삭제된 게시물이면 NOT_FOUND"
     )
-    @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/wishlist")
-    public BaseResponse<WishlistResponse> add(
+    public ResponseEntity<BaseResponse<WishlistResponse>> add(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody WishlistAddRequest request
     ) {
-        return BaseResponse.of(
-                WishlistStatusCode.ADD_SUCCESS,
-                wishlistService.add(Long.valueOf(memberId), request.partId())
-        );
+        WishlistAddResult result = wishlistService.add(Long.valueOf(memberId), request.postPartId());
+        WishlistStatusCode statusCode = result.created()
+                ? WishlistStatusCode.ADD_SUCCESS
+                : WishlistStatusCode.ALREADY_ADDED;
+        return ResponseEntity.status(statusCode.getHttpStatus())
+                .body(BaseResponse.of(statusCode, WishlistResponse.added(result.id())));
     }
 
     @Operation(
             summary = "부품 빼기",
-            description = "id 는 위시리스트 항목 ID (부품 ID 아님)"
+            description = "id 는 위시리스트 항목 ID. 204"
     )
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @DeleteMapping("/wishlist/{wishlistItemId}")
-    public BaseResponse<WishlistResponse> remove(
+    public void remove(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long wishlistItemId
     ) {
-        return BaseResponse.of(
-                WishlistStatusCode.REMOVE_SUCCESS,
-                wishlistService.remove(Long.valueOf(memberId), wishlistItemId)
-        );
+        wishlistService.remove(Long.valueOf(memberId), wishlistItemId);
     }
 
     @Operation(
             summary = "내 위시리스트",
-            description = "최근 담은 순. cursor 는 이전 응답의 nextCursor"
+            description = "최근 담은 순. 원 게시물이 숨김·삭제되면 빠진다. cursor 는 이전 응답의 nextCursor"
     )
     @GetMapping("/members/me/wishlist")
     public BaseResponse<WishlistResponse> getWishlist(

@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.ownedcar.entity;
 
 import ijiri.ijiriserver.domain.carmodel.dto.CarSpec;
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -19,7 +19,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 회원의 보유 차량. 게시물을 올릴 때 이 중 하나를 고른다.
+ * 회원의 보유 차량. 트림을 고르면 모델·세대가 정해지고, 게시물을 올릴 때 이 중 하나를 고른다.
+ * 트림은 바꿀 수 없다 (게시물이 이 차량을 가리키므로).
  */
 @Entity
 @Getter
@@ -39,38 +40,55 @@ public class OwnedCar extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(name = "car_model_id", nullable = false)
+    @Column(name = "car_model_id", nullable = false, updatable = false)
     private Long carModelId;
 
-    @Column(name = "car_generation_id", nullable = false)
+    @Column(name = "car_generation_id", nullable = false, updatable = false)
     private Long carGenerationId;
 
-    @Column(name = "car_trim_id")
+    @Column(name = "car_trim_id", nullable = false, updatable = false)
     private Long carTrimId;
 
-    @Column(name = "model_year")
-    private Integer modelYear;
+    @Column(name = "model_year", nullable = false)
+    private int modelYear;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "build_direction", length = 20)
-    private BuildDirection buildDirection;
+    @Column(name = "build_style", length = 20)
+    private BuildStyle buildStyle;
 
-    public static OwnedCar of(Long memberId, CarSpec spec, Integer modelYear, BuildDirection buildDirection) {
+    @Column(name = "nickname", length = 20)
+    private String nickname;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private OwnedCarStatus status;
+
+    public static OwnedCar of(Long memberId, CarSpec spec, int modelYear, BuildStyle buildStyle, String nickname) {
         return OwnedCar.builder()
                 .memberId(memberId)
                 .carModelId(spec.carModelId())
                 .carGenerationId(spec.generationId())
                 .carTrimId(spec.trimId())
                 .modelYear(modelYear)
-                .buildDirection(buildDirection)
+                .buildStyle(buildStyle)
+                .nickname(nickname)
+                .status(OwnedCarStatus.OWNED)
                 .build();
     }
 
-    public void update(CarSpec spec, Integer modelYear, BuildDirection buildDirection) {
-        this.carModelId = spec.carModelId();
-        this.carGenerationId = spec.generationId();
-        this.carTrimId = spec.trimId();
+    public void changeModelYear(int modelYear) {
         this.modelYear = modelYear;
-        this.buildDirection = buildDirection;
+    }
+
+    public void changeBuildStyle(BuildStyle buildStyle) {
+        this.buildStyle = buildStyle;
+    }
+
+    public void changeNickname(String nickname) {
+        this.nickname = nickname;
+    }
+
+    public void changeStatus(OwnedCarStatus status) {
+        this.status = status;
     }
 }

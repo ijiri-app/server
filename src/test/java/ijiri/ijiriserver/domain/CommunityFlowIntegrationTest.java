@@ -10,7 +10,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,14 +33,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 차종 마스터 -> 보유 차량 -> 사진 업로드 -> 게시물(부품 태그) -> 피드/상세 -> 위시리스트 -> 차단 -> 신고 -> 관리자 처리를
+ * 차종 마스터 -> 보유 차량 -> 사진 업로드 -> 게시물(부품·태그) -> 피드/상세 -> 위시리스트 -> 차단 -> 신고 -> 관리자 처리를
  * 실제 필터 체인으로 검증한다. 요청 제한이 테스트끼리 누적되지 않도록 요청마다 다른 IP 를 쓴다.
  */
 @SpringBootTest
@@ -50,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class CommunityFlowIntegrationTest {
 
     private static final String PASSWORD = "abcd1234";
+    private static final String HOST = "http://localhost";
     private static final AtomicInteger IP_SEQUENCE = new AtomicInteger();
 
     @Autowired
@@ -62,197 +63,335 @@ class CommunityFlowIntegrationTest {
     private VerificationMailClient verificationMailClient;
 
     @Test
-    void 차종_마스터는_로그인_없이_조회한다() throws Exception {
-        mockMvc.perform(get("/car-models"))
+    void 차종_마스터는_로그인_없이_조회하고_핵심_계열만_거를_수_있다() throws Exception {
+        mockMvc.perform(get("/car-models").param("core", "true"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.carModels[0].name").value("아반떼 N"));
+                .andExpect(jsonPath("$.result.items[*].isCore", not(hasItem(false))))
+                .andExpect(jsonPath("$.result.items[*].name", hasItem("아반떼 N")));
+        mockMvc.perform(get("/car-models").param("q", "n 라인"))
+                .andExpect(jsonPath("$.result.items[0].name").value("아반떼 N 라인"));
 
-        long modelId = firstCarModelId();
-        mockMvc.perform(get("/car-models/" + modelId))
+        mockMvc.perform(get("/car-models/" + avanteNId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.carModel.generations[0].trims[0].name").exists());
+                .andExpect(jsonPath("$.result.brand").value("현대"))
+                .andExpect(jsonPath("$.result.generations[0].trims[0].name").value("2.0T"));
     }
 
     @Test
-    void 게시물을_올리면_피드와_상세에_부품이_보이고_위시리스트에_담을_수_있다() throws Exception {
-        String token = signup(newEmail());
-        long postId = createPost(token, "N 퍼포먼스 머플러");
+    void 게시물을_올리면_피드와_상세에_보이고_다른_사람이_담으면_담기_수가_오른다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "TE37 SAGA 18");
 
-        mockMvc.perform(get("/feed").param("carModelIds", String.valueOf(firstCarModelId())))
+        mockMvc.perform(get("/feed").param("carModelId", String.valueOf(avanteNId())))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.posts[*].id", hasItem((int) postId)));
+                .andExpect(jsonPath("$.result.items[*].postId", hasItem((int) postId)))
+                .andExpect(jsonPath("$.result.items[0].thumbWidth").value(1536));
 
         String detail = mockMvc.perform(get("/posts/" + postId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.partCount").value(1))
-                .andExpect(jsonPath("$.result.images[0].width").value(3))
-                .andExpect(jsonPath("$.result.partGroups[0].category").value("POWERTRAIN"))
-                .andExpect(jsonPath("$.result.partGroups[0].parts[0].brandName").value("현대 N"))
+                .andExpect(jsonPath("$.result.car.carModelName").value("아반떼 N"))
+                .andExpect(jsonPath("$.result.car.year").value(2023))
+                // 분류 순서(익스테리어, 인테리어, 파워트레인, 하체)대로
+                .andExpect(jsonPath("$.result.parts[0].category").value("EXTERIOR"))
+                .andExpect(jsonPath("$.result.parts[1].category").value("CHASSIS"))
+                .andExpect(jsonPath("$.result.parts[1].brandName").value("RAYS"))
+                .andExpect(jsonPath("$.result.images[0].tags[0].x").value(0.42))
+                .andExpect(jsonPath("$.result.isMine").value(false))
+                .andExpect(jsonPath("$.result.createdAt").value(org.hamcrest.Matchers.endsWith("+09:00")))
                 .andReturn().getResponse().getContentAsString();
-        int partId = JsonPath.read(detail, "$.result.partGroups[0].parts[0].partId");
+        int postPartId = JsonPath.read(detail, "$.result.parts[1].postPartId");
 
-        String other = signup(newEmail());
-        mockMvc.perform(authorized(post("/wishlist"), other)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"partId\":%d}".formatted(partId)))
-                .andExpect(status().isCreated());
+        // 작성자 본인의 담기는 담기 수에 세지 않는다
+        wish(author, postPartId).andExpect(status().isCreated());
+        String other = signup();
+        String added = wish(other, postPartId).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        wish(other, postPartId)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.id").value((int) JsonPath.read(added, "$.result.id")));
+
         mockMvc.perform(authorized(get("/posts/" + postId), other))
-                .andExpect(jsonPath("$.result.partGroups[0].parts[0].wishlisted").value(true));
+                .andExpect(jsonPath("$.result.parts[1].wishCount").value(1))
+                .andExpect(jsonPath("$.result.parts[1].wished").value(true))
+                .andExpect(jsonPath("$.result.wishCount").value(1));
         mockMvc.perform(authorized(get("/members/me/wishlist"), other))
-                .andExpect(jsonPath("$.result.items[0].partId").value(partId));
+                .andExpect(jsonPath("$.result.items[0].postId").value((int) postId))
+                .andExpect(jsonPath("$.result.items[0].partName").value("TE37 SAGA 18"))
+                .andExpect(jsonPath("$.result.items[0].carModelName").value("아반떼 N"));
+        mockMvc.perform(authorized(get("/members/me"), author))
+                .andExpect(jsonPath("$.result.postCount").value(1))
+                .andExpect(jsonPath("$.result.receivedWishCount").value(1));
     }
 
     @Test
-    void 같은_이름의_새_부품은_대소문자_공백이_달라도_하나로_등록된다() throws Exception {
-        String token = signup(newEmail());
-        String partName = "Coilover " + UUID.randomUUID();
-        long first = createPost(token, partName);
-        long second = createPost(token, " " + partName.toUpperCase() + " ");
+    void 대소문자_공백_하이픈만_다른_새_부품은_같은_부품이고_검색도_된다() throws Exception {
+        String token = signup();
+        String name = "TE-37 " + UUID.randomUUID().toString().substring(0, 8);
+        long first = createPost(token, name);
+        long second = createPost(token, " " + name.toLowerCase().replace("-", "") + " ");
 
-        mockMvc.perform(get("/posts/" + first))
-                .andExpect(jsonPath("$.result.partGroups[0].parts[0].partId").value((int) partIdOf(second)));
+        assertThat(partIdOf(first)).isEqualTo(partIdOf(second));
+        mockMvc.perform(authorized(get("/parts"), token).param("q", name.replace("-", "").toUpperCase()))
+                .andExpect(jsonPath("$.result.items[0].id").value((int) partIdOf(first)))
+                .andExpect(jsonPath("$.result.items[0].useCount").value(2));
+        mockMvc.perform(authorized(get("/parts/suggest"), token).param("q", "rays " + name))
+                .andExpect(jsonPath("$.result.items[0].id").value((int) partIdOf(first)))
+                .andExpect(jsonPath("$.result.items[0].score").value(1.0));
+    }
+
+    @Test
+    void 부품을_수정해도_postPartId_를_보내면_담기가_남고_빠진_부품의_담기는_지워진다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "브레이크 " + UUID.randomUUID().toString().substring(0, 6));
+        String detail = mockMvc.perform(get("/posts/" + postId)).andReturn().getResponse().getContentAsString();
+        int kept = JsonPath.read(detail, "$.result.parts[0].postPartId");
+        int removed = JsonPath.read(detail, "$.result.parts[1].postPartId");
+        String imageKey = JsonPath.read(detail, "$.result.images[0].url").toString().replace(HOST + "/images/", "");
+        String other = signup();
+        wish(other, kept).andExpect(status().isCreated());
+        wish(other, removed).andExpect(status().isCreated());
+
+        mockMvc.perform(authorized(patch("/posts/" + postId), author)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"buildStyle":"CIRCUIT","parts":[{"ref":"a","category":"CHASSIS","postPartId":%d}],
+                                 "images":[{"imageKey":"%s","tags":[{"ref":"a","x":0.1,"y":0.2}]}]}
+                                """.formatted(kept, imageKey)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(authorized(get("/posts/" + postId), other))
+                .andExpect(jsonPath("$.result.car.buildStyle").value("CIRCUIT"))
+                .andExpect(jsonPath("$.result.parts.length()").value(1))
+                .andExpect(jsonPath("$.result.parts[0].postPartId").value(kept))
+                .andExpect(jsonPath("$.result.parts[0].wished").value(true))
+                .andExpect(jsonPath("$.result.images[0].tags[0].x").value(0.1));
+        mockMvc.perform(authorized(get("/members/me/wishlist"), other))
+                .andExpect(jsonPath("$.result.items.length()").value(1));
+    }
+
+    @Test
+    void 로그인_상태에서_차종을_고르지_않으면_관심_차종_피드를_본다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "프론트립");
+        String viewer = signup();
+        long otherModel = carModelIdByName("M3");
+        mockMvc.perform(authorized(put("/members/me/interest-cars"), viewer)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"carModelIds\":[%d]}".formatted(otherModel)))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(authorized(get("/feed"), viewer))
+                .andExpect(jsonPath("$.result.items[*].postId", not(hasItem((int) postId))));
+        mockMvc.perform(authorized(get("/members/me/interest-cars"), viewer))
+                .andExpect(jsonPath("$.result.items[0].name").value("M3"));
     }
 
     @Test
     void 차단하면_서로의_게시물이_보이지_않는다() throws Exception {
-        String author = signup(newEmail());
-        long postId = createPost(author, "브레이크 패드");
+        String author = signup();
+        long postId = createPost(author, "사이드 스커트");
         long authorId = myId(author);
-        String viewer = signup(newEmail());
+        String viewer = signup();
 
         mockMvc.perform(authorized(post("/members/" + authorId + "/block"), viewer))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
-        mockMvc.perform(authorized(get("/feed"), viewer))
-                .andExpect(jsonPath("$.result.posts[*].id", not(hasItem((int) postId))));
+        mockMvc.perform(authorized(get("/feed").param("carModelId", String.valueOf(avanteNId())), viewer))
+                .andExpect(jsonPath("$.result.items[*].postId", not(hasItem((int) postId))));
         mockMvc.perform(authorized(get("/posts/" + postId), viewer))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
         mockMvc.perform(authorized(get("/members/me/blocks"), viewer))
-                .andExpect(jsonPath("$.result.blockedMembers[0].memberId").value((int) authorId));
+                .andExpect(jsonPath("$.result.items[0].memberId").value((int) authorId));
     }
 
     @Test
-    void 관리자가_신고된_게시물을_숨기면_피드에서_빠진다() throws Exception {
-        String author = signup(newEmail());
-        long postId = createPost(author, "사이드 스커트");
-        String reporter = signup(newEmail());
+    void 관리자가_신고된_게시물을_숨기면_피드에서_빠진다_역할은_다시_로그인하지_않아도_반영된다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "스포일러");
+        String reporter = signup();
+        String report = "{\"targetType\":\"POST\",\"targetId\":%d,\"reason\":\"ILLEGAL_TUNING\"}".formatted(postId);
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(authorized(post("/reports"), reporter)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(report))
+                    .andExpect(status().isCreated());
+        }
 
-        mockMvc.perform(authorized(post("/reports"), reporter)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"targetType\":\"POST\",\"targetId\":%d,\"reason\":\"SPAM\"}".formatted(postId)))
-                .andExpect(status().isCreated());
-
-        mockMvc.perform(authorized(get("/admin/reports"), reporter))
-                .andExpect(status().isForbidden());
-
-        String adminEmail = newEmail();
-        signup(adminEmail);
-        jdbcTemplate.update("UPDATE member SET role = 'ADMIN' WHERE provider_member_id = ?", adminEmail);
-        String admin = signIn(adminEmail);
+        String admin = signup();
+        mockMvc.perform(authorized(get("/admin/reports"), admin))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+        jdbcTemplate.update("UPDATE member SET role = 'ADMIN' WHERE id = ?", myId(admin));
 
         String reports = mockMvc.perform(authorized(get("/admin/reports"), admin))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
-        List<Integer> reportIds = JsonPath.read(reports, "$.result.reports[?(@.targetId == %d)].id".formatted(postId));
+        List<Integer> reportIds = JsonPath.read(reports, "$.result.items[?(@.targetId == %d)].id".formatted(postId));
+        List<Integer> counts = JsonPath.read(
+                reports,
+                "$.result.items[?(@.targetId == %d)].reportCount".formatted(postId)
+        );
+        assertThat(counts).containsExactly(1);
 
         mockMvc.perform(authorized(patch("/admin/reports/" + reportIds.getFirst()), admin)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"action\":\"HIDE_POST\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.report.status").value("ACTIONED"));
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/posts/" + postId)).andExpect(status().isNotFound());
-        mockMvc.perform(get("/feed"))
-                .andExpect(jsonPath("$.result.posts[*].id", not(hasItem((int) postId))));
+        mockMvc.perform(authorized(get("/members/" + myId(author) + "/posts"), author))
+                .andExpect(jsonPath("$.result.items[0].hidden").value(true));
     }
 
     @Test
     void 탈퇴하면_게시물이_비공개되고_이메일이_지워진다() throws Exception {
-        String email = newEmail();
-        String token = signup(email);
-        long postId = createPost(token, "스포일러");
+        String token = signup();
+        long memberId = myId(token);
+        long postId = createPost(token, "흡기");
 
-        mockMvc.perform(authorized(delete("/members/me"), token)).andExpect(status().isOk());
+        mockMvc.perform(authorized(delete("/members/me"), token)).andExpect(status().isNoContent());
 
         mockMvc.perform(get("/posts/" + postId)).andExpect(status().isNotFound());
-        Integer remaining = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM member WHERE provider_member_id = ? AND email IS NULL",
-                Integer.class,
-                email
-        );
-        assertThat(remaining).isEqualTo(1);
+        String email = jdbcTemplate.queryForObject("SELECT email FROM member WHERE id = ?", String.class, memberId);
+        assertThat(email).isNull();
     }
 
     @Test
-    void 다른_사람의_업로드_사진으로는_게시물을_올릴_수_없다() throws Exception {
-        String owner = signup(newEmail());
-        long imageId = upload(owner);
-        String other = signup(newEmail());
-        long carId = registerCar(other);
+    void 남의_사진이나_남의_차량으로는_게시물을_올릴_수_없다() throws Exception {
+        String owner = signup();
+        String imageKey = upload(owner);
+        long ownerCar = registerCar(owner);
+        String other = signup();
+        long otherCar = registerCar(other);
 
-        mockMvc.perform(authorized(post("/posts"), other)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("""
-                                {"ownedCarId":%d,"buildDirection":"STREET","images":[{"imageId":%d}]}
-                                """.formatted(carId, imageId)))
+        createPostRequest(other, otherCar, imageKey, "[]")
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("UPLOAD4002"));
+                .andExpect(jsonPath("$.code").value("INVALID_IMAGE"));
+        createPostRequest(other, ownerCar, upload(other), "[]")
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
     @Test
-    void 사진이_아닌_파일은_올릴_수_없다() throws Exception {
-        String token = signup(newEmail());
-        MockMultipartFile file = new MockMultipartFile("file", "a.png", "image/png", "not an image".getBytes());
+    void 사진이_아닌_파일은_올릴_수_없고_올린_사진은_공개_URL_로_조회된다() throws Exception {
+        String token = signup();
+        String json = requestUploadUrl(token);
+        String uploadUrl = JsonPath.read(json, "$.result.items[0].uploadUrl");
+        String imageKey = JsonPath.read(json, "$.result.items[0].imageKey");
 
-        mockMvc.perform(authorized(multipart("/uploads/images").file(file), token))
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content("not an image".getBytes()))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("UPLOAD4001"));
+                .andExpect(jsonPath("$.code").value("UNSUPPORTED_IMAGE"));
+
+        byte[] png = pngBytes();
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content(png))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/images/" + imageKey))
+                .andExpect(status().isOk())
+                .andExpect(content().bytes(png));
     }
 
-    private long createPost(String token, String partName) throws Exception {
+    @Test
+    void 게시물이_있는_보유_차량을_지우면_이전_차량으로_바뀐다() throws Exception {
+        String token = signup();
         long carId = registerCar(token);
-        long imageId = upload(token);
-        String body = """
-                {"ownedCarId":%d,"buildDirection":"STREET","content":"첫 빌드","images":[{"imageId":%d,"tags":[
-                {"x":0.5,"y":0.5,"partName":"%s","brandName":"현대 N","category":"POWERTRAIN"}]}]}
-                """.formatted(carId, imageId, partName);
-        String json = mockMvc.perform(authorized(post("/posts"), token)
+        createPostRequest(token, carId, upload(token), "[]").andExpect(status().isCreated());
+
+        mockMvc.perform(authorized(delete("/members/me/cars/" + carId), token)).andExpect(status().isNoContent());
+
+        mockMvc.perform(authorized(get("/members/me/cars"), token))
+                .andExpect(jsonPath("$.result.items[0].id").value((int) carId))
+                .andExpect(jsonPath("$.result.items[0].status").value("PAST"))
+                .andExpect(jsonPath("$.result.items[0].postCount").value(1));
+    }
+
+    @Test
+    void 연식이_세대_판매_기간을_벗어나면_보유_차량을_등록할_수_없다() throws Exception {
+        String token = signup();
+
+        mockMvc.perform(authorized(post("/members/me/cars"), token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(body))
+                        .content("{\"trimId\":%d,\"year\":2015}".formatted(avanteNTrimId())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_MODEL_YEAR"));
+    }
+
+    // 부품 2개: 기존 브랜드(RAYS)의 새 부품(하체, 태그 있음)과 브랜드 없는 새 부품(익스테리어, 태그 없음)
+    private long createPost(String token, String partName) throws Exception {
+        String parts = """
+                [{"ref":"p1","category":"CHASSIS","brandName":"RAYS","partName":"%s"},
+                 {"ref":"p2","category":"EXTERIOR","partName":"프론트립 %s"}]
+                """.formatted(partName, UUID.randomUUID().toString().substring(0, 6));
+        String json = createPostRequest(token, registerCar(token), upload(token), parts)
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(json, "$.result.id")).longValue();
     }
 
+    private ResultActions createPostRequest(String token, long carId, String imageKey, String parts) throws Exception {
+        String tags = parts.contains("p1") ? "[{\"ref\":\"p1\",\"x\":0.42,\"y\":0.71}]" : "[]";
+        return mockMvc.perform(authorized(post("/posts"), token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"ownedCarId":%d,"buildStyle":"DAILY","content":"데일리","parts":%s,
+                         "images":[{"imageKey":"%s","width":1536,"height":2048,"tags":%s}]}
+                        """.formatted(carId, parts, imageKey, tags)));
+    }
+
+    private ResultActions wish(String token, int postPartId) throws Exception {
+        return mockMvc.perform(authorized(post("/wishlist"), token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"postPartId\":%d}".formatted(postPartId)));
+    }
+
+    // 하체(RAYS) 부품의 partId
     private long partIdOf(long postId) throws Exception {
         String json = mockMvc.perform(get("/posts/" + postId)).andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(json, "$.result.partGroups[0].parts[0].partId")).longValue();
+        List<Number> ids = JsonPath.read(json, "$.result.parts[?(@.category == 'CHASSIS')].partId");
+        return ids.getFirst().longValue();
     }
 
     private long registerCar(String token) throws Exception {
-        long modelId = firstCarModelId();
-        String detail = mockMvc.perform(get("/car-models/" + modelId)).andReturn().getResponse().getContentAsString();
-        int generationId = JsonPath.read(detail, "$.result.carModel.generations[0].id");
         String json = mockMvc.perform(authorized(post("/members/me/cars"), token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"carModelId\":%d,\"carGenerationId\":%d,\"modelYear\":2023}"
-                                .formatted(modelId, generationId)))
+                        .content("{\"trimId\":%d,\"year\":2023,\"nickname\":\"흰둥이\"}".formatted(avanteNTrimId())))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(json, "$.result.car.id")).longValue();
+        return ((Number) JsonPath.read(json, "$.result.id")).longValue();
     }
 
-    private long upload(String token) throws Exception {
-        MockMultipartFile file = new MockMultipartFile("file", "car.png", "image/png", pngBytes());
-        String json = mockMvc.perform(authorized(multipart("/uploads/images").file(file), token))
-                .andExpect(status().isCreated())
+    // 업로드 URL 발급 -> 그 URL 로 파일 PUT. imageKey 를 돌려준다
+    private String upload(String token) throws Exception {
+        String json = requestUploadUrl(token);
+        String uploadUrl = JsonPath.read(json, "$.result.items[0].uploadUrl");
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content(pngBytes()))
+                .andExpect(status().isOk());
+        return JsonPath.read(json, "$.result.items[0].imageKey");
+    }
+
+    private String requestUploadUrl(String token) throws Exception {
+        return mockMvc.perform(authorized(post("/uploads/images"), token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"count\":1,\"contentType\":\"image/png\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.items[0].expiresIn").value(600))
                 .andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(json, "$.result.imageId")).longValue();
     }
 
-    private long firstCarModelId() throws Exception {
+    private long avanteNId() throws Exception {
+        return carModelIdByName("아반떼 N");
+    }
+
+    private long carModelIdByName(String name) throws Exception {
         String json = mockMvc.perform(get("/car-models")).andReturn().getResponse().getContentAsString();
-        return ((Number) JsonPath.read(json, "$.result.carModels[0].id")).longValue();
+        List<Number> ids = JsonPath.read(json, "$.result.items[?(@.name == '%s')].id".formatted(name));
+        return ids.getFirst().longValue();
+    }
+
+    private long avanteNTrimId() throws Exception {
+        String json = mockMvc.perform(get("/car-models/" + avanteNId())).andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(json, "$.result.generations[0].trims[0].id")).longValue();
     }
 
     private long myId(String token) throws Exception {
@@ -268,26 +407,29 @@ class CommunityFlowIntegrationTest {
     }
 
     // 인증 코드 발송 -> 확인 -> 가입. 메일 발송은 목으로 대신하고 발송된 코드를 가로챈다
-    private String signup(String email) throws Exception {
-        postJson("/auth/email/verification-code", "{\"email\":\"%s\"}".formatted(email))
-                .andExpect(status().isOk());
+    private String signup() throws Exception {
+        String email = UUID.randomUUID() + "@ijiri.com";
+        postJson("/auth/email/send-code", "{\"email\":\"%s\"}".formatted(email))
+                .andExpect(status().isNoContent());
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
         verify(verificationMailClient).sendCode(eq(email), code.capture(), anyLong());
-        postJson(
-                "/auth/email/verification-code/verify",
+        String verified = postJson(
+                "/auth/email/verify-code",
                 "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, code.getValue())
-        ).andExpect(status().isOk());
-        return accessToken(postJson(
-                "/auth/signup",
-                "{\"email\":\"%s\",\"password\":\"%s\",\"nickname\":\"이지리\"}".formatted(email, PASSWORD)
-        ).andExpect(status().isCreated()));
-    }
-
-    private String signIn(String email) throws Exception {
-        return accessToken(postJson(
-                "/auth/signin",
-                "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD)
-        ).andExpect(status().isOk()));
+        ).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String body = """
+                {"email":"%s","password":"%s","nickname":"%s","verificationToken":"%s",
+                 "agreements":{"age14":true,"terms":true,"privacy":true}}
+                """.formatted(
+                email,
+                PASSWORD,
+                "n" + UUID.randomUUID().toString().substring(0, 10),
+                JsonPath.read(verified, "$.result.verificationToken")
+        );
+        String json = postJson("/auth/signup", body)
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(json, "$.result.accessToken");
     }
 
     private ResultActions postJson(String url, String body) throws Exception {
@@ -304,13 +446,5 @@ class CommunityFlowIntegrationTest {
             request.setRemoteAddr("10.1.%d.%d".formatted(sequence / 250, sequence % 250));
             return request;
         };
-    }
-
-    private String accessToken(ResultActions result) throws Exception {
-        return JsonPath.read(result.andReturn().getResponse().getContentAsString(), "$.result.accessToken");
-    }
-
-    private String newEmail() {
-        return UUID.randomUUID() + "@ijiri.com";
     }
 }

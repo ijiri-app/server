@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "Auth", description = "회원가입 / 로그인 / 토큰")
 @RestController
-@RequestMapping("/token")
+@RequestMapping("/auth")
 @RequiredArgsConstructor
 public class TokenController {
 
@@ -30,7 +30,7 @@ public class TokenController {
     @Operation(
             summary = "토큰 갱신",
             description = "body 의 refreshToken, 없으면 refreshToken 쿠키로 토큰을 새로 발급하고 쿠키에도 저장. "
-                    + "이미 교체됐거나 로그아웃·다른 기기 로그인으로 지워진 토큰은 거부(AUTH4012)"
+                    + "이미 교체됐거나 로그아웃·다른 기기 로그인으로 지워진 토큰은 거부(INVALID_REFRESH_TOKEN)"
     )
     @SecurityRequirements
     @PostMapping("/refresh")

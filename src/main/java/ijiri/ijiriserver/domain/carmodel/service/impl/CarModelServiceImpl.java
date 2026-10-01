@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.carmodel.service.impl;
 
+import ijiri.ijiriserver.domain.carmodel.dto.CarModelInfo;
 import ijiri.ijiriserver.domain.carmodel.dto.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.dto.response.CarModelResponse;
 import ijiri.ijiriserver.domain.carmodel.entity.CarGeneration;
@@ -24,11 +25,16 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -38,21 +44,23 @@ import java.util.stream.Collectors;
 public class CarModelServiceImpl implements CarModelService {
 
     private static final String MASTER_CSV = "car-master/car_master.csv";
-    // manufacturer,model,generation_code,generation_name,start_year,end_year,trim
+    // brand,model,is_core,generation_code,start_year,end_year,trim
     private static final int COLUMN_COUNT = 7;
 
     private final CarModelRepository carModelRepository;
     private final CarGenerationRepository carGenerationRepository;
     private final CarTrimRepository carTrimRepository;
+    private final Clock clock;
 
     @Override
-    public CarModelResponse getCarModels() {
-        return CarModelResponse.list(carModelRepository.findAllByOrderByDisplayOrderAscIdAsc());
+    public CarModelResponse getCarModels(String keyword, boolean coreOnly) {
+        String normalized = keyword == null ? "" : keyword.strip().toLowerCase(Locale.ROOT);
+        return CarModelResponse.list(carModelRepository.search(normalized, coreOnly));
     }
 
     @Override
     public CarModelResponse getCarModel(Long carModelId) {
-        CarModel model = carModelRepository.findById(carModelId)
+        CarModel model = carModelRepository.findByIdAndHiddenFalse(carModelId)
                 .orElseThrow(() -> new CustomException(CarModelStatusCode.CAR_MODEL_NOT_FOUND));
         List<CarGeneration> generations = carGenerationRepository.findAllByCarModelIdOrderByStartYearAscIdAsc(
                 carModelId
@@ -66,22 +74,39 @@ public class CarModelServiceImpl implements CarModelService {
     @Override
     public void validateCarModelsExist(Collection<Long> carModelIds) {
         Collection<Long> distinct = new HashSet<>(carModelIds);
-        if (carModelRepository.countByIdIn(distinct) != distinct.size()) {
+        if (carModelRepository.countByIdInAndHiddenFalse(distinct) != distinct.size()) {
             throw new CustomException(CarModelStatusCode.CAR_MODEL_NOT_FOUND);
         }
     }
 
+    // 숨긴 차종이어도 이미 연결된 보유 차량·게시물은 계속 보여야 하므로 숨김 여부는 보지 않는다
     @Override
-    public CarSpec getSpec(Long carModelId, Long generationId, Long trimId) {
-        CarModel model = carModelRepository.findById(carModelId)
-                .orElseThrow(() -> new CustomException(CarModelStatusCode.INVALID_CAR_SPEC));
-        CarGeneration generation = carGenerationRepository.findById(generationId)
-                .filter(found -> found.getCarModelId().equals(carModelId))
-                .orElseThrow(() -> new CustomException(CarModelStatusCode.INVALID_CAR_SPEC));
-        CarTrim trim = trimId == null ? null : carTrimRepository.findById(trimId)
-                .filter(found -> found.getCarGenerationId().equals(generationId))
-                .orElseThrow(() -> new CustomException(CarModelStatusCode.INVALID_CAR_SPEC));
+    public CarSpec getSpecByTrim(Long trimId) {
+        CarTrim trim = carTrimRepository.findById(trimId)
+                .orElseThrow(() -> new CustomException(CarModelStatusCode.INVALID_TRIM));
+        CarGeneration generation = carGenerationRepository.findById(trim.getCarGenerationId()).orElseThrow();
+        CarModel model = carModelRepository.findById(generation.getCarModelId()).orElseThrow();
         return CarSpec.of(model, generation, trim);
+    }
+
+    @Override
+    public void validateModelYear(Long generationId, int year) {
+        CarGeneration generation = carGenerationRepository.findById(generationId)
+                .orElseThrow(() -> new CustomException(CarModelStatusCode.INVALID_TRIM));
+        if (!generation.coversYear(year, LocalDate.now(clock).getYear())) {
+            throw new CustomException(CarModelStatusCode.INVALID_MODEL_YEAR);
+        }
+    }
+
+    @Override
+    public List<CarModelInfo> getCarModelInfos(List<Long> carModelIds) {
+        Map<Long, CarModel> models = carModelRepository.findAllById(carModelIds).stream()
+                .collect(Collectors.toMap(CarModel::getId, Function.identity()));
+        return carModelIds.stream()
+                .map(models::get)
+                .filter(Objects::nonNull)
+                .map(CarModelInfo::from)
+                .toList();
     }
 
     @Override
@@ -91,19 +116,20 @@ public class CarModelServiceImpl implements CarModelService {
     }
 
     // 차종 마스터는 CSV 로 관리한다. 기동할 때마다 CSV 에 있고 DB 에 없는 행만 추가하므로 여러 번 실행해도 안전하다.
-    // 이미 들어간 행의 수정·삭제는 게시물이 참조하므로 마이그레이션으로 따로 처리한다
+    // 이미 들어간 행의 수정·숨김은 게시물이 참조하므로 마이그레이션 또는 관리자 기능으로 처리한다
     @EventListener(ApplicationReadyEvent.class)
     @Transactional
     public void importMasterData() {
         List<String[]> rows = readCsv();
-        int nextOrder = carModelRepository.findAllByOrderByDisplayOrderAscIdAsc().size();
+        int nextOrder = (int) carModelRepository.count();
         int added = 0;
         for (String[] row : rows) {
-            CarModel model = carModelRepository.findByManufacturerAndName(row[0], row[1]).orElse(null);
+            CarModel model = carModelRepository.findByBrandAndName(row[0], row[1]).orElse(null);
             if (model == null) {
                 model = carModelRepository.save(CarModel.builder()
-                        .manufacturer(row[0])
+                        .brand(row[0])
                         .name(row[1])
+                        .core(Boolean.parseBoolean(row[2]))
                         .displayOrder(nextOrder++)
                         .build()
                 );
@@ -122,11 +148,10 @@ public class CarModelServiceImpl implements CarModelService {
     }
 
     private CarGeneration findOrCreateGeneration(Long carModelId, String[] row) {
-        return carGenerationRepository.findByCarModelIdAndCode(carModelId, row[2])
+        return carGenerationRepository.findByCarModelIdAndCode(carModelId, row[3])
                 .orElseGet(() -> carGenerationRepository.save(CarGeneration.builder()
                         .carModelId(carModelId)
-                        .code(row[2])
-                        .name(row[3])
+                        .code(row[3])
                         .startYear(Integer.parseInt(row[4]))
                         .endYear(row[5].isEmpty() ? null : Integer.parseInt(row[5]))
                         .build()

@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.post.entity;
 
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.domain.ownedcar.dto.OwnedCarSnapshot;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.CascadeType;
@@ -25,8 +25,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 게시물. 차량 정보는 작성 시점의 보유 차량에서 복사해 두어, 보유 차량을 고치거나 지워도 바뀌지 않는다.
- * partCount 는 피드 카드에 보여줄 태그된 부품 수(중복 제외)로, 사진을 바꿀 때마다 다시 센다.
+ * 게시물. 보유 차량을 가리키고, 피드 필터·카드용으로 차종·트림·연식을 복사해 둔다 (보유 차량의 트림은 바뀌지 않는다).
+ * partCount 는 피드 카드에 보여줄 부품 수로, 부품을 바꿀 때마다 다시 센다.
+ * 삭제할 때 태그(부품 쪽)가 사진보다 먼저 지워지도록 parts 를 images 앞에 둔다.
  */
 @Entity
 @Getter
@@ -37,6 +38,7 @@ import java.util.List;
         name = "post",
         indexes = {
                 @Index(name = "idx_post_member_id", columnList = "member_id"),
+                @Index(name = "idx_post_owned_car_id", columnList = "owned_car_id"),
                 @Index(name = "idx_post_status_car_model_id", columnList = "status, car_model_id")
         }
 )
@@ -49,23 +51,26 @@ public class Post extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(name = "car_model_id", nullable = false)
+    @Column(name = "owned_car_id", nullable = false, updatable = false)
+    private Long ownedCarId;
+
+    @Column(name = "car_model_id", nullable = false, updatable = false)
     private Long carModelId;
 
-    @Column(name = "car_generation_id", nullable = false)
+    @Column(name = "car_generation_id", nullable = false, updatable = false)
     private Long carGenerationId;
 
-    @Column(name = "car_trim_id")
+    @Column(name = "car_trim_id", nullable = false, updatable = false)
     private Long carTrimId;
 
-    @Column(name = "model_year")
-    private Integer modelYear;
+    @Column(name = "model_year", nullable = false, updatable = false)
+    private int modelYear;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "build_direction", nullable = false, length = 20)
-    private BuildDirection buildDirection;
+    @Column(name = "build_style", nullable = false, length = 20)
+    private BuildStyle buildStyle;
 
-    @Column(name = "content", length = 2000)
+    @Column(name = "content", length = 1000)
     private String content;
 
     @Enumerated(EnumType.STRING)
@@ -78,46 +83,44 @@ public class Post extends BaseTimeEntity {
     @Builder.Default
     @OrderBy("displayOrder ASC")
     @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PostPart> parts = new ArrayList<>();
+
+    @Builder.Default
+    @OrderBy("displayOrder ASC")
+    @OneToMany(mappedBy = "post", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<PostImage> images = new ArrayList<>();
 
-    public static Post of(Long memberId, OwnedCarSnapshot car, BuildDirection buildDirection, String content) {
+    public static Post of(Long memberId, OwnedCarSnapshot car, BuildStyle buildStyle, String content) {
         return Post.builder()
                 .memberId(memberId)
+                .ownedCarId(car.ownedCarId())
                 .carModelId(car.spec().carModelId())
                 .carGenerationId(car.spec().generationId())
                 .carTrimId(car.spec().trimId())
                 .modelYear(car.modelYear())
-                .buildDirection(buildDirection)
+                .buildStyle(buildStyle)
                 .content(content)
                 .status(PostStatus.PUBLIC)
                 .build();
     }
 
-    public void changeCar(OwnedCarSnapshot car) {
-        this.carModelId = car.spec().carModelId();
-        this.carGenerationId = car.spec().generationId();
-        this.carTrimId = car.spec().trimId();
-        this.modelYear = car.modelYear();
-    }
-
-    public void changeBuildDirection(BuildDirection buildDirection) {
-        this.buildDirection = buildDirection;
+    public void changeBuildStyle(BuildStyle buildStyle) {
+        this.buildStyle = buildStyle;
     }
 
     public void changeContent(String content) {
         this.content = content;
     }
 
-    // 유지되는 사진은 같은 PostImage 를 다시 넣어야 한다. 새 엔티티로 바꾸면 삭제보다 INSERT 가 먼저 실행돼
-    // uploaded_image_id 유니크 제약에 걸린다
-    public void replaceImages(List<PostImage> newImages) {
-        images.clear();
-        images.addAll(newImages);
-        partCount = (int) newImages.stream()
-                .flatMap(image -> image.getTags().stream())
-                .map(PostPartTag::getPartId)
-                .distinct()
-                .count();
+    public void addImage(PostImage image) {
+        images.add(image);
+    }
+
+    // 유지되는 부품은 같은 PostPart 를 다시 넣어 postPartId(위시리스트가 가리키는 id)를 지킨다
+    public void replaceParts(List<PostPart> newParts) {
+        parts.clear();
+        parts.addAll(newParts);
+        partCount = newParts.size();
     }
 
     public void hide() {

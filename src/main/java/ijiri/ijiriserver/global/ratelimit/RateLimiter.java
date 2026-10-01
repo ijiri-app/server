@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -24,7 +25,10 @@ public class RateLimiter {
 
     public void check(String key, int limit, Duration period) {
         if (!tryAcquire(key, limit, period)) {
-            throw new CustomException(CommonStatusCode.TOO_MANY_REQUESTS);
+            throw new CustomException(
+                    CommonStatusCode.TOO_MANY_REQUESTS,
+                    Map.of("retryAfterSeconds", retryAfterSeconds(key))
+            );
         }
     }
 
@@ -43,6 +47,16 @@ public class RateLimiter {
     public boolean isExhausted(String key, int limit) {
         Window window = windows.get(key);
         return window != null && !window.isExpired(clock.instant()) && window.count() >= limit;
+    }
+
+    // 현재 윈도가 끝날 때까지 남은 초 (최소 1). 윈도가 없으면 0
+    public long retryAfterSeconds(String key) {
+        Window window = windows.get(key);
+        if (window == null) {
+            return 0;
+        }
+        long millis = Duration.between(clock.instant(), window.expiresAt()).toMillis();
+        return Math.max(1, TimeUnit.MILLISECONDS.toSeconds(millis + 999));
     }
 
     public void reset(String key) {

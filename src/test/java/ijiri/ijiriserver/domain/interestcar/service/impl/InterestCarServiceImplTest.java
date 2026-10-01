@@ -1,21 +1,20 @@
 package ijiri.ijiriserver.domain.interestcar.service.impl;
 
 import ijiri.ijiriserver.domain.carmodel.service.CarModelService;
-import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
+import ijiri.ijiriserver.domain.interestcar.entity.MemberInterestCar;
 import ijiri.ijiriserver.domain.interestcar.repository.MemberInterestCarRepository;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 class InterestCarServiceImplTest {
 
@@ -36,11 +35,13 @@ class InterestCarServiceImplTest {
 
     @Test
     void 기존_목록을_지우고_요청_순서대로_저장한다() {
-        when(repository.saveAll(anyList())).thenAnswer(invocation -> invocation.getArgument(0));
-
-        InterestCarResponse response = service.replaceAll(1L, List.of(25L, 3L, 17L));
+        service.replaceAll(1L, List.of(25L, 3L, 17L));
 
         verify(repository).deleteAllByMemberIdInBulk(1L);
-        assertThat(response.carModelIds()).containsExactly(25L, 3L, 17L);
+        ArgumentCaptor<List<MemberInterestCar>> saved = ArgumentCaptor.forClass(List.class);
+        verify(repository).saveAll(saved.capture());
+        assertThat(saved.getValue())
+                .extracting(MemberInterestCar::getCarModelId)
+                .containsExactly(25L, 3L, 17L);
     }
 }

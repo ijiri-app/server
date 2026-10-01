@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.global.config;
 
 import ijiri.ijiriserver.global.jwt.JwtAuthenticationFilter;
+import ijiri.ijiriserver.global.security.AdminVerifier;
 import ijiri.ijiriserver.global.security.CustomAccessDeniedHandler;
 import ijiri.ijiriserver.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,6 +9,7 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationDecision;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -27,17 +29,20 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final CustomAuthenticationEntryPoint customAuthenticationEntryPoint;
     private final CustomAccessDeniedHandler customAccessDeniedHandler;
+    private final AdminVerifier adminVerifier;
     private final List<String> allowedOrigins;
 
     public SecurityConfig(
             JwtAuthenticationFilter jwtAuthenticationFilter,
             CustomAuthenticationEntryPoint customAuthenticationEntryPoint,
             CustomAccessDeniedHandler customAccessDeniedHandler,
+            AdminVerifier adminVerifier,
             @Value("${cors.allowed-origins}") List<String> allowedOrigins
     ) {
         this.jwtAuthenticationFilter = jwtAuthenticationFilter;
         this.customAuthenticationEntryPoint = customAuthenticationEntryPoint;
         this.customAccessDeniedHandler = customAccessDeniedHandler;
+        this.adminVerifier = adminVerifier;
         this.allowedOrigins = allowedOrigins;
     }
 
@@ -66,25 +71,20 @@ public class SecurityConfig {
                                 "/car-models",
                                 "/car-models/*",
                                 "/feed",
-                                "/posts/*",
-                                "/members/*/posts"
+                                "/posts/*"
                         ).permitAll()
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/auth/signin/oauth",
-                                "/auth/signup",
-                                "/auth/email/verification-code",
-                                "/auth/email/verification-code/verify",
-                                "/auth/signin",
-                                "/token/refresh",
-                                "/auth/signout",
-                                "/auth/password/reset"
-                        ).permitAll()
+                        // 업로드 URL 의 서명(만료 시각 포함)으로 인증한다. presigned URL 과 같은 방식
+                        .requestMatchers(HttpMethod.PUT, "/uploads/files/**").permitAll()
+                        .requestMatchers("/auth/**").permitAll()
                         .requestMatchers(
                                 "/error"
                         ).permitAll()
-                        // 역할은 access token 의 role 클레임에서 온다. 역할을 바꾸면 다시 로그인해야 반영된다
-                        .requestMatchers("/admin/**").hasRole("ADMIN")
+                        // 역할을 바꾸면 다시 로그인하지 않아도 바로 반영되도록 요청마다 DB 의 역할을 확인한다
+                        .requestMatchers("/admin/**").access((authentication, context) -> new AuthorizationDecision(
+                                authentication.get() != null
+                                        && authentication.get().isAuthenticated()
+                                        && adminVerifier.isAdmin(authentication.get().getName())
+                        ))
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(e -> e

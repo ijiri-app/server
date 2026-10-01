@@ -9,7 +9,7 @@ public interface TokenService {
 
     AuthResponse refresh(String refreshToken);
 
-    AuthResponse signOut(Long memberId);
+    void signOut(Long memberId);
 
-    AuthResponse signOutByRefreshToken(String refreshToken);
+    void signOutByRefreshToken(String refreshToken);
 }

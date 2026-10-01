@@ -24,24 +24,11 @@ public class VerificationMailClient {
     }
 
     public void sendCode(String to, String code, long validMinutes) {
-        send(to, "인증 코드: " + code + "\n" + validMinutes + "분 안에 입력해 주세요.");
-    }
-
-    // 이미 가입된 이메일로 인증 요청이 오면 API 응답은 똑같이 두고 메일로만 알려, 가입 여부가 노출되지 않게 한다
-    public void sendAlreadyRegistered(String to) {
-        send(to, "이미 이 이메일로 가입된 계정이 있습니다.\n본인이 요청하지 않았다면 이 메일은 무시해 주세요.");
-    }
-
-    public void sendWithdrawnAccount(String to) {
-        send(to, "이 이메일은 탈퇴 처리된 계정입니다.\n탈퇴 후 30일이 지나면 다시 가입할 수 있습니다.");
-    }
-
-    private void send(String to, String text) {
         SimpleMailMessage message = new SimpleMailMessage();
         message.setFrom(from);
         message.setTo(to);
         message.setSubject(SUBJECT);
-        message.setText(text);
+        message.setText("인증 코드: " + code + "\n" + validMinutes + "분 안에 입력해 주세요.");
         try {
             mailSender.send(message);
         } catch (MailException e) {

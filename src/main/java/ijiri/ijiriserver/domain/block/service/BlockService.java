@@ -6,9 +6,9 @@ import java.util.Set;
 
 public interface BlockService {
 
-    BlockResponse block(Long blockerId, Long targetId);
+    void block(Long blockerId, Long targetId);
 
-    BlockResponse unblock(Long blockerId, Long targetId);
+    void unblock(Long blockerId, Long targetId);
 
     BlockResponse getBlockedMembers(Long memberId);
 

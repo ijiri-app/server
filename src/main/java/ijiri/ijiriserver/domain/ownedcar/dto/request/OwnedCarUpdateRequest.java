@@ -1,28 +1,24 @@
 package ijiri.ijiriserver.domain.ownedcar.dto.request;
 
-import ijiri.ijiriserver.domain.carmodel.entity.BuildDirection;
+import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
- * 보유 차량 정보를 통째로 바꾼다 (보내지 않은 선택 항목은 비워진다).
+ * 보낸 필드만 바꾼다 (null 이면 그대로). 트림은 바꿀 수 없다.
  */
 public record OwnedCarUpdateRequest(
-        @Schema(description = "차종(모델) ID", example = "1")
-        @NotNull Long carModelId,
+        @Schema(description = "연식", example = "2023")
+        Integer year,
 
-        @Schema(description = "세대 ID", example = "1")
-        @NotNull Long carGenerationId,
+        @Schema(description = "빌드 방향", example = "STANCE")
+        BuildStyle buildStyle,
 
-        @Schema(description = "트림 ID (선택)", example = "1")
-        Long carTrimId,
+        @Schema(description = "차량 별칭 (20자 이하, 빈 문자열이면 삭제)", example = "흰둥이")
+        @Size(max = 20) String nickname,
 
-        @Schema(description = "연식 (선택)", example = "2023")
-        @Min(1950) @Max(2100) Integer modelYear,
-
-        @Schema(description = "빌드 방향 (선택)", example = "STREET")
-        BuildDirection buildDirection
+        @Schema(description = "OWNED(지금 타는 차) / PAST(이전 차량)", example = "PAST")
+        OwnedCarStatus status
 ) {
 }

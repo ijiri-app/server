@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
 import java.util.Locale;
 
 /**
- * RESET_PASSWORD 용도로 인증 코드 확인을 마친 이메일만 재설정할 수 있다.
+ * RESET_PASSWORD 용도로 인증 코드를 확인해 받은 verificationToken 이 있어야 재설정할 수 있다.
  */
 public record PasswordResetRequest(
         @Schema(description = "인증을 마친 이메일", example = "user@ijiri.com")
@@ -21,7 +21,10 @@ public record PasswordResetRequest(
         @Size(min = 8, max = 20)
         @Pattern(regexp = SignupRequest.PASSWORD_REGEX, message = "영문과 숫자를 각각 1개 이상 포함해야 합니다.")
         @MaxUtf8Bytes(72)
-        String newPassword
+        String newPassword,
+
+        @Schema(description = "인증 코드 확인 응답의 verificationToken")
+        @NotBlank String verificationToken
 ) {
 
     public PasswordResetRequest {

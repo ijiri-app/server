@@ -40,13 +40,16 @@ public class CarGeneration {
     @Column(name = "code", nullable = false, length = 50)
     private String code;
 
-    @Column(name = "name", nullable = false, length = 100)
-    private String name;
-
     @Column(name = "start_year", nullable = false)
     private int startYear;
 
     // null 이면 현재 판매 중
     @Column(name = "end_year")
     private Integer endYear;
+
+    // 보유 차량 연식은 세대의 판매 기간 안에서만 고를 수 있다 (판매 중이면 올해 + 1 까지)
+    public boolean coversYear(int year, int currentYear) {
+        int lastYear = endYear != null ? endYear : currentYear + 1;
+        return year >= startYear && year <= lastYear;
+    }
 }

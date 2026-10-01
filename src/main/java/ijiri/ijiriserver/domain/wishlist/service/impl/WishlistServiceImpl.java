@@ -1,10 +1,14 @@
 package ijiri.ijiriserver.domain.wishlist.service.impl;
 
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
+import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.service.MemberService;
-import ijiri.ijiriserver.domain.part.dto.PartInfo;
-import ijiri.ijiriserver.domain.part.exception.PartStatusCode;
-import ijiri.ijiriserver.domain.part.service.PartService;
+import ijiri.ijiriserver.domain.post.dto.PostPartSummary;
+import ijiri.ijiriserver.domain.post.dto.WishTarget;
+import ijiri.ijiriserver.domain.post.event.PostDeletedEvent;
+import ijiri.ijiriserver.domain.post.event.PostPartsRemovedEvent;
+import ijiri.ijiriserver.domain.post.service.PostService;
+import ijiri.ijiriserver.domain.wishlist.dto.WishlistAddResult;
 import ijiri.ijiriserver.domain.wishlist.dto.response.WishlistResponse;
 import ijiri.ijiriserver.domain.wishlist.entity.WishlistItem;
 import ijiri.ijiriserver.domain.wishlist.exception.WishlistStatusCode;
@@ -13,15 +17,13 @@ import ijiri.ijiriserver.domain.wishlist.service.WishlistService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.annotation.Order;
 import org.springframework.data.domain.Limit;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -29,36 +31,38 @@ import java.util.Set;
 public class WishlistServiceImpl implements WishlistService {
 
     private final WishlistItemRepository wishlistItemRepository;
-    private final PartService partService;
+    private final PostService postService;
     private final MemberService memberService;
 
     // 비로그인 상태에서 담기를 누르고 로그인한 뒤 다시 보내는 흐름이 있으므로, 이미 담긴 부품이면 기존 항목을 돌려준다
     @Override
     @Transactional
-    public WishlistResponse add(Long memberId, Long partId) {
+    public WishlistAddResult add(Long memberId, Long postPartId) {
         memberService.getById(memberId);
-        PartInfo part = partService.getPartInfos(List.of(partId)).get(partId);
-        if (part == null) {
-            throw new CustomException(PartStatusCode.PART_NOT_FOUND);
-        }
-        WishlistItem item = wishlistItemRepository.findByMemberIdAndPartId(memberId, partId)
-                .orElseGet(() -> wishlistItemRepository.save(WishlistItem.builder()
-                        .memberId(memberId)
-                        .partId(partId)
-                        .build()
+        WishTarget target = postService.getWishTarget(postPartId);
+        return wishlistItemRepository.findByMemberIdAndPostPartId(memberId, postPartId)
+                .map(item -> new WishlistAddResult(item.getId(), false))
+                .orElseGet(() -> new WishlistAddResult(
+                        wishlistItemRepository.save(WishlistItem.builder()
+                                .memberId(memberId)
+                                .postPartId(target.postPartId())
+                                .postId(target.postId())
+                                .postAuthorId(target.postAuthorId())
+                                .build()
+                        ).getId(),
+                        true
                 ));
-        return WishlistResponse.single(WishlistResponse.Item.of(item, part));
     }
 
     @Override
     @Transactional
-    public WishlistResponse remove(Long memberId, Long wishlistItemId) {
+    public void remove(Long memberId, Long wishlistItemId) {
         WishlistItem item = wishlistItemRepository.findByIdAndMemberId(wishlistItemId, memberId)
                 .orElseThrow(() -> new CustomException(WishlistStatusCode.WISHLIST_ITEM_NOT_FOUND));
         wishlistItemRepository.delete(item);
-        return WishlistResponse.message(WishlistStatusCode.REMOVE_SUCCESS.getMessage());
     }
 
+    // 숨김 처리되거나 작성자가 탈퇴한 게시물의 부품은 목록에서 뺀다
     @Override
     public WishlistResponse getWishlist(Long memberId, Long cursor, int size) {
         List<WishlistItem> found = wishlistItemRepository.findByMemberIdAndIdLessThanOrderByIdDesc(
@@ -68,23 +72,39 @@ public class WishlistServiceImpl implements WishlistService {
         );
         boolean hasNext = found.size() > size;
         List<WishlistItem> page = hasNext ? found.subList(0, size) : found;
-        Map<Long, PartInfo> parts = partService.getPartInfos(page.stream().map(WishlistItem::getPartId).toList());
+        Map<Long, PostPartSummary> parts = postService.getPostPartSummaries(
+                page.stream().map(WishlistItem::getPostPartId).toList()
+        );
         return WishlistResponse.list(
                 page.stream()
-                        .map(item -> WishlistResponse.Item.of(item, parts.get(item.getPartId())))
+                        .filter(item -> parts.containsKey(item.getPostPartId()))
+                        .map(item -> WishlistResponse.Item.of(item, parts.get(item.getPostPartId())))
                         .toList(),
                 hasNext ? page.getLast().getId() : null
         );
     }
 
-    @Override
-    public Set<Long> getWishlistedPartIds(Long memberId, Collection<Long> partIds) {
-        if (partIds.isEmpty()) {
-            return Set.of();
-        }
-        return new HashSet<>(wishlistItemRepository.findPartIds(memberId, partIds));
+    @EventListener
+    @Transactional
+    public void removeAll(PostDeletedEvent event) {
+        wishlistItemRepository.deleteAllByPostId(event.postId());
     }
 
+    @EventListener
+    @Transactional
+    public void removeAll(PostPartsRemovedEvent event) {
+        wishlistItemRepository.deleteAllByPostPartIds(event.postPartIds());
+    }
+
+    // 탈퇴한 회원의 담기는 담기 수에서 빠진다. 행은 영구 삭제 때 지운다
+    @EventListener
+    @Transactional
+    public void hideAll(MemberWithdrawnEvent event) {
+        wishlistItemRepository.hideAllByMemberId(event.memberId());
+    }
+
+    // 영구 삭제 순서의 첫 단계 (위시리스트·태그 -> 게시물 -> 보유 차량 -> 회원)
+    @Order(0)
     @EventListener
     @Transactional
     public void removeAll(MemberPurgedEvent event) {

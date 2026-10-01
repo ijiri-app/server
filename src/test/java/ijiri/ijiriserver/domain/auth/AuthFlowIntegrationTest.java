@@ -52,19 +52,87 @@ class AuthFlowIntegrationTest {
     private VerificationMailClient verificationMailClient;
 
     @Test
-    void 가입하면_토큰이_발급되고_내_정보를_조회할_수_있다() throws Exception {
-        Tokens tokens = signup(newEmail());
+    void 가입하면_로그인_응답을_받고_내_정보를_조회할_수_있다() throws Exception {
+        String email = newEmail();
+        String token = verificationToken(email, "SIGNUP", 1);
 
-        mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
+        String json = postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.nickname").value("이지리"));
+                .andExpect(jsonPath("$.result.isNewMember").value(true))
+                .andExpect(jsonPath("$.result.member.id").exists())
+                .andReturn().getResponse().getContentAsString();
+
+        mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(accessToken(json))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.email").value(email))
+                .andExpect(jsonPath("$.result.postCount").value(0));
     }
 
     @Test
     void 인증_없이_보호된_API_를_부르면_401() throws Exception {
         mockMvc.perform(get("/members/me"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("COMMON401"));
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    void 이미_가입된_이메일로_가입_코드를_요청하면_EMAIL_ALREADY_EXISTS() throws Exception {
+        String email = newEmail();
+        signup(email);
+
+        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"SIGNUP\"}".formatted(email))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void 인증_코드가_틀리면_남은_시도_횟수를_준다() throws Exception {
+        String email = newEmail();
+        postJson("/auth/email/send-code", "{\"email\":\"%s\"}".formatted(email)).andExpect(status().isNoContent());
+        String wrong = sentCode(email, 1).equals("000000") ? "111111" : "000000";
+
+        postJson("/auth/email/verify-code", "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, wrong))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_CODE"))
+                .andExpect(jsonPath("$.result.remainingAttempts").value(4));
+    }
+
+    @Test
+    void 같은_닉네임으로는_가입할_수_없다() throws Exception {
+        String nickname = uniqueNickname();
+        String first = newEmail();
+        postJson("/auth/signup", signupBody(first, nickname, verificationToken(first, "SIGNUP", 1)))
+                .andExpect(status().isOk());
+        String second = newEmail();
+
+        postJson("/auth/signup", signupBody(second, nickname, verificationToken(second, "SIGNUP", 1)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NICKNAME_ALREADY_EXISTS"));
+    }
+
+    @Test
+    void 필수_약관에_동의하지_않으면_가입할_수_없다() throws Exception {
+        String email = newEmail();
+        String body = """
+                {"email":"%s","password":"%s","nickname":"%s","verificationToken":"%s",
+                 "agreements":{"age14":true,"terms":true,"privacy":false}}
+                """.formatted(email, PASSWORD, uniqueNickname(), verificationToken(email, "SIGNUP", 1));
+
+        postJson("/auth/signup", body)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.result.fields['agreements.privacy']").exists());
+    }
+
+    @Test
+    void verificationToken_은_한_번만_쓸_수_있다() throws Exception {
+        String email = newEmail();
+        String token = verificationToken(email, "SIGNUP", 1);
+        postJson("/auth/signup", signupBody(email, uniqueNickname(), token)).andExpect(status().isOk());
+
+        postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_TOKEN"));
     }
 
     @Test
@@ -72,8 +140,8 @@ class AuthFlowIntegrationTest {
         String email = newEmail();
         Tokens first = signup(email);
 
-        String body = "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD);
-        Tokens second = tokens(postJson("/auth/signin", body).andExpect(status().isOk()));
+        Tokens second = tokens(postJson("/auth/login/email", credentials(email, PASSWORD))
+                .andExpect(status().isOk()));
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(first.accessToken())))
                 .andExpect(status().isUnauthorized());
@@ -86,11 +154,11 @@ class AuthFlowIntegrationTest {
         Tokens tokens = signup(newEmail());
         String body = "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken());
 
-        Tokens refreshed = tokens(postJson("/token/refresh", body).andExpect(status().isOk()));
+        Tokens refreshed = tokens(postJson("/auth/refresh", body).andExpect(status().isOk()));
 
-        postJson("/token/refresh", body)
+        postJson("/auth/refresh", body)
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH4012"));
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(refreshed.accessToken())))
                 .andExpect(status().isOk());
     }
@@ -99,12 +167,12 @@ class AuthFlowIntegrationTest {
     void 로그아웃하면_access_token_과_refresh_token_이_모두_거부된다() throws Exception {
         Tokens tokens = signup(newEmail());
 
-        mockMvc.perform(post("/auth/signout").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
-                .andExpect(status().isOk());
+        mockMvc.perform(post("/auth/logout").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
                 .andExpect(status().isUnauthorized());
-        postJson("/token/refresh", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
+        postJson("/auth/refresh", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -112,8 +180,8 @@ class AuthFlowIntegrationTest {
     void access_token_없이_refresh_token_만으로도_로그아웃할_수_있다() throws Exception {
         Tokens tokens = signup(newEmail());
 
-        postJson("/auth/signout", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
-                .andExpect(status().isOk());
+        postJson("/auth/logout", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
                 .andExpect(status().isUnauthorized());
@@ -121,19 +189,19 @@ class AuthFlowIntegrationTest {
 
     @Test
     void 토큰이_하나도_없으면_로그인_상태가_아니므로_로그아웃은_401() throws Exception {
-        mockMvc.perform(post("/auth/signout"))
+        mockMvc.perform(post("/auth/logout"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("AUTH4012"));
+                .andExpect(jsonPath("$.code").value("INVALID_REFRESH_TOKEN"));
     }
 
     @Test
     void 이미_지워진_refresh_token_으로_로그아웃해도_남은_쿠키를_만료시킨다() throws Exception {
         Tokens tokens = signup(newEmail());
         String body = "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken());
-        postJson("/auth/signout", body).andExpect(status().isOk());
+        postJson("/auth/logout", body).andExpect(status().isNoContent());
 
-        postJson("/auth/signout", body)
-                .andExpect(status().isOk())
+        postJson("/auth/logout", body)
+                .andExpect(status().isNoContent())
                 .andExpect(cookie().maxAge("accessToken", 0))
                 .andExpect(cookie().maxAge("refreshToken", 0));
     }
@@ -143,12 +211,12 @@ class AuthFlowIntegrationTest {
         Tokens tokens = signup(newEmail());
 
         Cookie refreshCookie = new Cookie("refreshToken", tokens.refreshToken());
-        mockMvc.perform(post("/auth/signout").cookie(refreshCookie).with(uniqueIp()))
-                .andExpect(status().isOk())
+        mockMvc.perform(post("/auth/logout").cookie(refreshCookie).with(uniqueIp()))
+                .andExpect(status().isNoContent())
                 .andExpect(cookie().maxAge("accessToken", 0))
                 .andExpect(cookie().maxAge("refreshToken", 0));
 
-        postJson("/token/refresh", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
+        postJson("/auth/refresh", "{\"refreshToken\":\"%s\"}".formatted(tokens.refreshToken()))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -158,86 +226,92 @@ class AuthFlowIntegrationTest {
         Tokens tokens = signup(email);
 
         mockMvc.perform(delete("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
-                .andExpect(status().isOk());
+                .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
                 .andExpect(status().isUnauthorized());
-        postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD))
+        postJson("/auth/login/email", credentials(email, PASSWORD))
                 .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.code").value("MEMBER403"));
+                .andExpect(jsonPath("$.code").value("MEMBER_WITHDRAWN"));
     }
 
     @Test
-    void 로그인에_5회_실패하면_맞는_비밀번호도_잠금으로_거부된다() throws Exception {
+    void 로그인에_5번_실패하면_맞는_비밀번호도_ACCOUNT_LOCKED_로_거부된다() throws Exception {
         String email = newEmail();
         signup(email);
-        String wrong = "{\"email\":\"%s\",\"password\":\"wrong1234\"}".formatted(email);
         for (int i = 0; i < 5; i++) {
-            postJson("/auth/signin", wrong)
+            postJson("/auth/login/email", credentials(email, "wrong1234"))
                     .andExpect(status().isUnauthorized())
-                    .andExpect(jsonPath("$.code").value("AUTH4013"));
+                    .andExpect(jsonPath("$.code").value("INVALID_CREDENTIALS"));
         }
 
-        postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD))
-                .andExpect(status().isTooManyRequests())
-                .andExpect(jsonPath("$.code").value("AUTH4293"));
+        postJson("/auth/login/email", credentials(email, PASSWORD))
+                .andExpect(status().isLocked())
+                .andExpect(jsonPath("$.code").value("ACCOUNT_LOCKED"))
+                .andExpect(jsonPath("$.result.retryAfterSeconds").isNumber());
     }
 
     @Test
     void 비밀번호를_재설정하면_기존_세션이_끊기고_새_비밀번호로_로그인한다() throws Exception {
         String email = newEmail();
         Tokens tokens = signup(email);
+        String token = verificationToken(email, "RESET_PASSWORD", 2);
 
         postJson(
-                "/auth/email/verification-code",
-                "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email)
-        ).andExpect(status().isOk());
-        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
-        verify(verificationMailClient, times(2)).sendCode(eq(email), code.capture(), anyLong());
-        postJson(
-                "/auth/email/verification-code/verify",
-                "{\"email\":\"%s\",\"code\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}"
-                        .formatted(email, code.getValue())
-        ).andExpect(status().isOk());
-
-        postJson("/auth/password/reset", "{\"email\":\"%s\",\"newPassword\":\"newpass123\"}".formatted(email))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.code").value("AUTH2005"));
+                "/auth/password/reset",
+                "{\"email\":\"%s\",\"newPassword\":\"newpass123\",\"verificationToken\":\"%s\"}"
+                        .formatted(email, token)
+        ).andExpect(status().isNoContent());
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
                 .andExpect(status().isUnauthorized());
-        postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"newpass123\"}".formatted(email))
+        postJson("/auth/login/email", credentials(email, "newpass123"))
                 .andExpect(status().isOk());
     }
 
     @Test
-    void 가입하지_않은_이메일로_재설정_코드를_요청해도_같은_응답을_주고_메일은_보내지_않는다() throws Exception {
+    void 가입하지_않은_이메일로_재설정_코드를_요청해도_204_를_주고_메일은_보내지_않는다() throws Exception {
         String email = newEmail();
 
-        postJson(
-                "/auth/email/verification-code",
-                "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email)
-        ).andExpect(status().isOk());
+        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email))
+                .andExpect(status().isNoContent());
 
         verify(verificationMailClient, never()).sendCode(eq(email), anyString(), anyLong());
     }
 
     // 인증 코드 발송 -> 확인 -> 가입. 메일 발송은 목으로 대신하고 발송된 코드를 가로챈다
     private Tokens signup(String email) throws Exception {
-        postJson("/auth/email/verification-code", "{\"email\":\"%s\"}".formatted(email))
-                .andExpect(status().isOk());
+        String token = verificationToken(email, "SIGNUP", 1);
+        return tokens(postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
+                .andExpect(status().isOk()));
+    }
+
+    // sentCount: 이 이메일로 지금까지 발송된 코드 수 (마지막 코드를 쓴다)
+    private String verificationToken(String email, String purpose, int sentCount) throws Exception {
+        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"%s\"}".formatted(email, purpose))
+                .andExpect(status().isNoContent());
+        String json = postJson(
+                "/auth/email/verify-code",
+                "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, sentCode(email, sentCount))
+        ).andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        return JsonPath.read(json, "$.result.verificationToken");
+    }
+
+    private String sentCode(String email, int sentCount) {
         ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
-        verify(verificationMailClient).sendCode(eq(email), code.capture(), anyLong());
+        verify(verificationMailClient, times(sentCount)).sendCode(eq(email), code.capture(), anyLong());
+        return code.getValue();
+    }
 
-        postJson(
-                "/auth/email/verification-code/verify",
-                "{\"email\":\"%s\",\"code\":\"%s\"}".formatted(email, code.getValue())
-        ).andExpect(status().isOk());
+    private String signupBody(String email, String nickname, String verificationToken) {
+        return """
+                {"email":"%s","password":"%s","nickname":"%s","verificationToken":"%s",
+                 "agreements":{"age14":true,"terms":true,"privacy":true}}
+                """.formatted(email, PASSWORD, nickname, verificationToken);
+    }
 
-        return tokens(postJson(
-                "/auth/signup",
-                "{\"email\":\"%s\",\"password\":\"%s\",\"nickname\":\"이지리\"}".formatted(email, PASSWORD)
-        ).andExpect(status().isCreated()));
+    private String credentials(String email, String password) {
+        return "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, password);
     }
 
     private ResultActions postJson(String url, String body) throws Exception {
@@ -254,7 +328,11 @@ class AuthFlowIntegrationTest {
 
     private Tokens tokens(ResultActions result) throws Exception {
         String json = result.andReturn().getResponse().getContentAsString();
-        return new Tokens(JsonPath.read(json, "$.result.accessToken"), JsonPath.read(json, "$.result.refreshToken"));
+        return new Tokens(accessToken(json), JsonPath.read(json, "$.result.refreshToken"));
+    }
+
+    private String accessToken(String json) {
+        return JsonPath.read(json, "$.result.accessToken");
     }
 
     private String bearer(String accessToken) {
@@ -263,6 +341,11 @@ class AuthFlowIntegrationTest {
 
     private String newEmail() {
         return UUID.randomUUID() + "@ijiri.com";
+    }
+
+    // 닉네임은 중복 불가라 테스트마다 다르게 만든다 (2~12자)
+    private String uniqueNickname() {
+        return "n" + UUID.randomUUID().toString().substring(0, 10);
     }
 
     private record Tokens(String accessToken, String refreshToken) {

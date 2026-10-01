@@ -10,20 +10,26 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * carmodel 도메인의 모든 API 응답. 목록은 carModels, 상세는 carModel 만 채운다.
+ * carmodel 도메인의 모든 API 응답. 목록은 items, 상세는 모델 필드와 generations 만 채운다.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record CarModelResponse(
-        List<Model> carModels,
-        Model carModel
+        Long id,
+        String brand,
+        String name,
+        List<Generation> generations,
+        List<Item> items
 ) {
 
     public static CarModelResponse list(List<CarModel> models) {
         return new CarModelResponse(
+                null,
+                null,
+                null,
+                null,
                 models.stream()
-                        .map(model -> Model.of(model, null))
-                        .toList(),
-                null
+                        .map(Item::from)
+                        .toList()
         );
     }
 
@@ -33,36 +39,39 @@ public record CarModelResponse(
                         CarTrim::getCarGenerationId,
                         Collectors.mapping(trim -> new Trim(trim.getId(), trim.getName()), Collectors.toList())
                 ));
-        List<Generation> generationResponses = generations.stream()
-                .map(generation -> new Generation(
-                        generation.getId(),
-                        generation.getCode(),
-                        generation.getName(),
-                        generation.getStartYear(),
-                        generation.getEndYear(),
-                        trimsByGeneration.getOrDefault(generation.getId(), List.of())
-                ))
-                .toList();
-        return new CarModelResponse(null, Model.of(model, generationResponses));
+        return new CarModelResponse(
+                model.getId(),
+                model.getBrand(),
+                model.getName(),
+                generations.stream()
+                        .map(generation -> new Generation(
+                                generation.getId(),
+                                generation.getCode(),
+                                generation.getStartYear(),
+                                generation.getEndYear(),
+                                trimsByGeneration.getOrDefault(generation.getId(), List.of())
+                        ))
+                        .toList(),
+                null
+        );
     }
 
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public record Model(
+    public record Item(
             Long id,
-            String manufacturer,
+            String brand,
             String name,
-            List<Generation> generations
+            boolean isCore,
+            String imageUrl
     ) {
 
-        static Model of(CarModel model, List<Generation> generations) {
-            return new Model(model.getId(), model.getManufacturer(), model.getName(), generations);
+        static Item from(CarModel model) {
+            return new Item(model.getId(), model.getBrand(), model.getName(), model.isCore(), model.getImageUrl());
         }
     }
 
     public record Generation(
             Long id,
             String code,
-            String name,
             int startYear,
             Integer endYear,
             List<Trim> trims

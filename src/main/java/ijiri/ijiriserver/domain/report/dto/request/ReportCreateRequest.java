@@ -17,7 +17,7 @@ public record ReportCreateRequest(
         @Schema(description = "신고 사유", example = "SPAM")
         @NotNull ReportReason reason,
 
-        @Schema(description = "상세 내용 (선택)")
-        @Size(max = 500) String detail
+        @Schema(description = "상세 내용 (선택, 300자 이하)")
+        @Size(max = 300) String detail
 ) {
 }

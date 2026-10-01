@@ -33,9 +33,10 @@ import java.time.Duration;
 @RestController
 @RequestMapping("/auth")
 @RequiredArgsConstructor
+@SecurityRequirements
 public class AuthController {
 
-    // 여러 계정을 돌려가며 대입하는 공격을 막는 IP 단위 제한 (계정 단위 제한은 서비스에서)
+    // 여러 계정을 돌려가며 대입하는 공격을 막는 IP 단위 제한 (계정 단위 잠금은 서비스에서)
     private static final String SIGNIN_KEY_PREFIX = "signin:ip:";
     private static final int SIGNIN_LIMIT_PER_IP = 30;
     private static final Duration SIGNIN_LIMIT_PERIOD = Duration.ofMinutes(15);
@@ -46,11 +47,9 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 회원가입",
-            description = "인증 코드 확인을 마친 이메일 + 비밀번호, 닉네임으로 가입. "
-                    + "가입과 동시에 로그인되어 토큰을 body 와 쿠키로 발급한다"
+            description = "인증 코드 확인으로 받은 verificationToken, 비밀번호, 닉네임(중복 불가), 필수 약관 3개. "
+                    + "가입과 동시에 로그인되어 로그인 응답과 같은 형태로 토큰을 body 와 쿠키로 발급한다"
     )
-    @SecurityRequirements
-    @ResponseStatus(HttpStatus.CREATED)
     @PostMapping("/signup")
     public BaseResponse<AuthResponse> signup(
             @Valid @RequestBody SignupRequest request,
@@ -63,11 +62,10 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 로그인",
-            description = "이메일, 비밀번호로 로그인. 오류는 AUTH4013 하나로 응답. "
-                    + "이메일별 15분 안에 5회 실패하면 잠금(AUTH4293), IP 별 15분당 30회 제한"
+            description = "오류는 INVALID_CREDENTIALS 하나로 응답. 이메일별 15분 안에 5번 실패하면 "
+                    + "ACCOUNT_LOCKED(423, retryAfterSeconds). IP 별 15분당 30회 제한"
     )
-    @SecurityRequirements
-    @PostMapping("/signin")
+    @PostMapping("/login/email")
     public BaseResponse<AuthResponse> signIn(
             @Valid @RequestBody SignInRequest request,
             HttpServletRequest httpRequest,
@@ -81,35 +79,37 @@ public class AuthController {
 
     @Operation(
             summary = "비밀번호 재설정",
-            description = "RESET_PASSWORD 용도로 인증 코드 확인을 마친 이메일의 비밀번호를 바꾸고 모든 세션을 끊는다"
+            description = "RESET_PASSWORD 용도로 받은 verificationToken 으로 비밀번호를 바꾸고 모든 세션을 끊는다. 204"
     )
-    @SecurityRequirements
+    @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/password/reset")
-    public BaseResponse<AuthResponse> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
-        return BaseResponse.of(AuthStatusCode.PASSWORD_RESET, authService.resetPassword(request));
+    public void resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        authService.resetPassword(request);
     }
 
     @Operation(
             summary = "로그아웃",
             description = "유효한 access token(헤더/쿠키)이 있으면 그 회원의 세션을, 없으면 body(앱) 또는 쿠키(웹)의 "
-                    + "refreshToken 세션을 지우고 토큰 쿠키를 만료시킨다. 토큰이 하나도 없으면 로그인 상태가 아니므로 401"
+                    + "refreshToken 세션을 지우고 토큰 쿠키를 만료시킨다. 204. 토큰이 하나도 없으면 401"
     )
-    @PostMapping("/signout")
-    public BaseResponse<AuthResponse> signOut(
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PostMapping("/logout")
+    public void signOut(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @RequestBody(required = false) RefreshTokenRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
     ) {
         // 두 경우 모두 세션을 먼저 지운 뒤 쿠키를 만료시킨다 (삭제가 실패하면 쿠키도 그대로 둔다)
-        AuthResponse response = memberId != null
-                ? authService.signOut(Long.valueOf(memberId))
-                : authService.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
+        if (memberId != null) {
+            authService.signOut(Long.valueOf(memberId));
+        } else {
+            authService.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
+        }
         jwtCookieManager.expireTokenCookies(httpResponse);
-        return BaseResponse.of(AuthStatusCode.SIGNOUT_SUCCESS, response);
     }
 
-    // 토큰이 하나도 없으면 로그인 상태가 아니므로 갱신 API 와 같은 코드(AUTH4012)로 거부한다.
+    // 토큰이 하나도 없으면 로그인 상태가 아니므로 갱신 API 와 같은 코드(INVALID_REFRESH_TOKEN)로 거부한다.
     // refresh token 이 있으면 이미 만료·삭제된 세션이어도 남은 쿠키를 지우도록 성공으로 응답한다
     private String resolveRefreshToken(RefreshTokenRequest request, HttpServletRequest httpRequest) {
         String bodyToken = request == null ? null : request.refreshToken();

@@ -20,6 +20,7 @@ import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class InterestCarServiceImpl implements InterestCarService {
 
     private final MemberInterestCarRepository memberInterestCarRepository;
@@ -27,14 +28,13 @@ public class InterestCarServiceImpl implements InterestCarService {
     private final CarModelService carModelService;
 
     @Override
-    @Transactional(readOnly = true)
     public InterestCarResponse getAll(Long memberId) {
-        return InterestCarResponse.from(memberInterestCarRepository.findAllByMemberIdOrderByDisplayOrderAsc(memberId));
+        return InterestCarResponse.from(carModelService.getCarModelInfos(getCarModelIds(memberId)));
     }
 
     @Override
     @Transactional
-    public InterestCarResponse replaceAll(Long memberId, List<Long> carModelIds) {
+    public void replaceAll(Long memberId, List<Long> carModelIds) {
         // 탈퇴 후 만료 전 access token 으로 들어온 요청이 데이터를 다시 만들지 않도록 활성 회원만 허용
         memberService.getById(memberId);
         if (new HashSet<>(carModelIds).size() != carModelIds.size()) {
@@ -43,15 +43,22 @@ public class InterestCarServiceImpl implements InterestCarService {
         carModelService.validateCarModelsExist(carModelIds);
 
         memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
-        List<MemberInterestCar> interestCars = IntStream.range(0, carModelIds.size())
+        memberInterestCarRepository.saveAll(IntStream.range(0, carModelIds.size())
                 .mapToObj(order -> MemberInterestCar.builder()
                         .memberId(memberId)
                         .carModelId(carModelIds.get(order))
                         .displayOrder(order)
                         .build()
                 )
+                .toList()
+        );
+    }
+
+    @Override
+    public List<Long> getCarModelIds(Long memberId) {
+        return memberInterestCarRepository.findAllByMemberIdOrderByDisplayOrderAsc(memberId).stream()
+                .map(MemberInterestCar::getCarModelId)
                 .toList();
-        return InterestCarResponse.from(memberInterestCarRepository.saveAll(interestCars));
     }
 
     @EventListener

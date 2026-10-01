@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -41,18 +42,22 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
 
-    // 인증 완료 기록을 먼저 소모해 이메일 소유가 증명된 뒤에만 가입하고, 중복 여부도 그때만 알려준다.
-    // 가입된 이메일로는 인증 코드가 발송되지 않으므로 중복 에러는 동시 가입 경합에서만 난다.
-    // 가입 직후 바로 서비스를 쓰도록(디자인: "구경하러 가기") 토큰까지 발급한다
+    // 인증 기록 소모, 회원 생성, 토큰 발급을 한 트랜잭션으로 묶어 중간에 실패하면 인증을 다시 쓸 수 있게 한다.
+    // 가입 직후 바로 서비스를 쓰도록 로그인 응답과 같은 형태로 돌려준다
     @Override
+    @Transactional
     public AuthResponse signup(SignupRequest request) {
-        emailVerificationService.consumeVerified(request.email(), VerificationPurpose.SIGNUP);
+        emailVerificationService.consumeVerified(
+                request.email(),
+                VerificationPurpose.SIGNUP,
+                request.verificationToken()
+        );
         Member member = memberService.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),
                 passwordEncoder.encode(request.password())
         ));
-        return tokenService.issue(member).withSignIn(true, MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(true, MemberResponse.summary(member));
     }
 
     // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답하고,
@@ -61,7 +66,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse signIn(SignInRequest request) {
         String failureKey = SIGNIN_FAILURE_KEY_PREFIX + request.email();
         if (rateLimiter.isExhausted(failureKey, MAX_SIGNIN_FAILURES)) {
-            throw new CustomException(AuthStatusCode.SIGNIN_LOCKED);
+            throw new CustomException(
+                    AuthStatusCode.ACCOUNT_LOCKED,
+                    Map.of("retryAfterSeconds", rateLimiter.retryAfterSeconds(failureKey))
+            );
         }
 
         Optional<Member> found = memberService.findEmailMember(request.email());
@@ -77,29 +85,32 @@ public class AuthServiceImpl implements AuthService {
         if (member.isWithdrawn()) {
             throw new CustomException(MemberStatusCode.MEMBER_WITHDRAWN);
         }
-        return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(false, MemberResponse.summary(member));
     }
 
     // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
-    public AuthResponse signOut(Long memberId) {
-        return tokenService.signOut(memberId);
+    public void signOut(Long memberId) {
+        tokenService.signOut(memberId);
     }
 
     @Override
-    public AuthResponse signOutByRefreshToken(String refreshToken) {
-        return tokenService.signOutByRefreshToken(refreshToken);
+    public void signOutByRefreshToken(String refreshToken) {
+        tokenService.signOutByRefreshToken(refreshToken);
     }
 
-    // 인증 기록 소모, 비밀번호 변경, 세션 폐기를 한 트랜잭션으로 묶어 중간에 실패하면 인증을 다시 쓸 수 있게 한다.
+    // 인증 기록 소모, 비밀번호 변경, 세션 폐기를 한 트랜잭션으로 묶는다.
     // 비밀번호를 잊어 잠긴 계정도 재설정 후 바로 로그인할 수 있도록 실패 횟수를 지운다
     @Override
     @Transactional
-    public AuthResponse resetPassword(PasswordResetRequest request) {
-        emailVerificationService.consumeVerified(request.email(), VerificationPurpose.RESET_PASSWORD);
+    public void resetPassword(PasswordResetRequest request) {
+        emailVerificationService.consumeVerified(
+                request.email(),
+                VerificationPurpose.RESET_PASSWORD,
+                request.verificationToken()
+        );
         Long memberId = memberService.changePassword(request.email(), passwordEncoder.encode(request.newPassword()));
         tokenService.signOut(memberId);
         rateLimiter.reset(SIGNIN_FAILURE_KEY_PREFIX + request.email());
-        return AuthResponse.message(AuthStatusCode.PASSWORD_RESET.getMessage());
     }
 }

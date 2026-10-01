@@ -17,8 +17,6 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
-import org.springframework.web.multipart.MaxUploadSizeExceededException;
-import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
@@ -29,35 +27,37 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(CustomException.class)
-    public ResponseEntity<BaseResponse<Void>> handleCustomException(CustomException e) {
-        return toResponse(e.getStatusCode());
+    public ResponseEntity<BaseResponse<Map<String, Object>>> handleCustomException(CustomException e) {
+        return toResponse(e.getStatusCode(), e.getDetails());
     }
 
-    // @Valid @RequestBody 검증 실패 -> 필드별 에러 메시지 반환
+    // @Valid @RequestBody 검증 실패 -> result.fields 에 칸별 사유
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    public ResponseEntity<BaseResponse<Map<String, String>>> handleMethodArgumentNotValid(
+    public ResponseEntity<BaseResponse<Map<String, Object>>> handleMethodArgumentNotValid(
             MethodArgumentNotValidException e
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
         e.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.putIfAbsent(error.getField(), error.getDefaultMessage()));
-        return toResponse(CommonStatusCode.INVALID_INPUT, errors);
+        e.getBindingResult().getGlobalErrors()
+                .forEach(error -> errors.putIfAbsent(error.getObjectName(), error.getDefaultMessage()));
+        return validationFailed(errors);
     }
 
     // @PathVariable, @RequestParam 검증 실패
     @ExceptionHandler(ConstraintViolationException.class)
-    public ResponseEntity<BaseResponse<Map<String, String>>> handleConstraintViolation(
+    public ResponseEntity<BaseResponse<Map<String, Object>>> handleConstraintViolation(
             ConstraintViolationException e
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
         e.getConstraintViolations()
                 .forEach(v -> errors.putIfAbsent(v.getPropertyPath().toString(), v.getMessage()));
-        return toResponse(CommonStatusCode.INVALID_INPUT, errors);
+        return validationFailed(errors);
     }
 
     // Spring 6.1+ 메서드 파라미터 검증 실패 (@RequestBody 가 아닌 파라미터의 제약)
     @ExceptionHandler(HandlerMethodValidationException.class)
-    public ResponseEntity<BaseResponse<Map<String, String>>> handleHandlerMethodValidation(
+    public ResponseEntity<BaseResponse<Map<String, Object>>> handleHandlerMethodValidation(
             HandlerMethodValidationException e
     ) {
         Map<String, String> errors = new LinkedHashMap<>();
@@ -68,7 +68,7 @@ public class GlobalExceptionHandler {
                         .findFirst()
                         .orElse(null)
         ));
-        return toResponse(CommonStatusCode.INVALID_INPUT, errors);
+        return validationFailed(errors);
     }
 
     @ExceptionHandler({
@@ -76,7 +76,6 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException.class,
             MissingRequestHeaderException.class,
             MissingRequestCookieException.class,
-            MissingServletRequestPartException.class,
             MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<BaseResponse<Void>> handleBadRequest(Exception e) {
@@ -91,11 +90,6 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<BaseResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
         return toResponse(CommonStatusCode.UNSUPPORTED_MEDIA_TYPE);
-    }
-
-    @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<BaseResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
-        return toResponse(CommonStatusCode.PAYLOAD_TOO_LARGE);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
@@ -114,6 +108,10 @@ public class GlobalExceptionHandler {
     public ResponseEntity<BaseResponse<Void>> handleException(Exception e) {
         log.error("Unhandled exception", e);
         return toResponse(CommonStatusCode.INTERNAL_SERVER_ERROR);
+    }
+
+    private ResponseEntity<BaseResponse<Map<String, Object>>> validationFailed(Map<String, String> fields) {
+        return toResponse(CommonStatusCode.VALIDATION_FAILED, Map.of("fields", fields));
     }
 
     private ResponseEntity<BaseResponse<Void>> toResponse(StatusCode statusCode) {

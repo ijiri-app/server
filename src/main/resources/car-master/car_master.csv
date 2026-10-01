@@ -1,10 +1,22 @@
-manufacturer,model,generation_code,generation_name,start_year,end_year,trim
-현대,아반떼 N,CN7,아반떼 N (CN7),2021,2023,N 6MT
-현대,아반떼 N,CN7,아반떼 N (CN7),2021,2023,N 8DCT
-현대,아반떼 N,CN7 PE,아반떼 N (CN7 페이스리프트),2023,,N 6MT
-현대,아반떼 N,CN7 PE,아반떼 N (CN7 페이스리프트),2023,,N 8DCT
-현대,아반떼 N 라인,CN7,아반떼 N 라인 (CN7),2020,2023,1.6 터보
-현대,아반떼 N 라인,CN7 PE,아반떼 N 라인 (CN7 페이스리프트),2023,,1.6 터보
-현대,벨로스터 N,JS,벨로스터 N (JS),2018,2022,N 6MT
-현대,벨로스터 N,JS,벨로스터 N (JS),2018,2022,N 8DCT
-현대,코나 N,OS,코나 N (OS),2021,2023,N 8DCT
+brand,model,is_core,generation_code,start_year,end_year,trim
+현대,아반떼 N,true,CN7,2021,,2.0T
+현대,아반떼 N 라인,false,CN7,2020,,1.6T
+BMW,3시리즈,true,F30,2012,2019,320d
+BMW,3시리즈,true,F30,2012,2019,328i
+BMW,3시리즈,true,G20,2019,,320i
+BMW,3시리즈,true,G20,2019,,330i
+BMW,3시리즈,true,G20,2019,,M340i
+BMW,4시리즈,true,F32,2013,2020,420i
+BMW,4시리즈,true,F32,2013,2020,428i
+BMW,4시리즈,true,G22,2020,,420i
+BMW,4시리즈,true,G22,2020,,M440i
+BMW,M3,true,F80,2014,2018,M3
+BMW,M3,true,G80,2021,,M3 Competition
+BMW,M4,true,F82,2014,2020,M4
+BMW,M4,true,G82,2021,,M4 Competition
+제네시스,제네시스 쿠페,true,BK,2008,2016,2.0T
+제네시스,제네시스 쿠페,true,BK,2008,2016,3.8
+제네시스,G70,true,IK,2017,,2.0T
+제네시스,G70,true,IK,2017,,3.3T
+기아,스팅어,true,CK,2017,2023,2.5T
+기아,스팅어,true,CK,2017,2023,3.3T

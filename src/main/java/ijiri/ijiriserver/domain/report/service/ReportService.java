@@ -7,9 +7,9 @@ import ijiri.ijiriserver.domain.report.entity.ReportStatus;
 
 public interface ReportService {
 
-    ReportResponse report(Long reporterId, ReportCreateRequest request);
+    void report(Long reporterId, ReportCreateRequest request);
 
     ReportResponse getReports(ReportStatus status, Long cursor, int size);
 
-    ReportResponse process(Long adminId, Long reportId, ReportProcessRequest request);
+    void process(Long adminId, Long reportId, ReportProcessRequest request);
 }

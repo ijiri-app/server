@@ -28,10 +28,11 @@ public class OAuthController {
 
     @Operation(
             summary = "소셜 로그인 (카카오/구글 공용)",
-            description = "카카오는 SDK 의 accessToken, 구글은 idToken 을 token 에 담는다. 신규 회원이면 자동 가입"
+            description = "카카오는 SDK 의 accessToken, 구글은 idToken 을 token 에 담는다. "
+                    + "신규 회원이면 자동 가입(닉네임 자동 생성)하고 isNewMember = true"
     )
     @SecurityRequirements
-    @PostMapping("/signin/oauth")
+    @PostMapping("/login")
     public BaseResponse<AuthResponse> signIn(
             @Valid @RequestBody OAuthSignInRequest request,
             HttpServletResponse httpResponse

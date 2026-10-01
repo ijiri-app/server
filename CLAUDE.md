@@ -42,19 +42,19 @@ ijiri.ijiriserver
 │   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout, /auth/password/reset,
-│   │   │   │                     /auth/email/verification-code, /auth/email/verification-code/verify
+│   │   ├── email                 POST /auth/signup, /auth/login/email, /auth/logout, /auth/password/reset,
+│   │   │   │                     /auth/email/send-code, /auth/email/verify-code
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
 │   │   │   ├── scheduler  service  service/impl
-│   │   ├── oauth                 POST /auth/signin/oauth (provider + token), OAuthController
+│   │   ├── oauth                 POST /auth/login (provider + token), OAuthController
 │   │   │   ├── controller  dto/request  service  service/impl
 │   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
 │   │   ├── google                client only: GoogleOAuthClient (verify)
-│   │   └── token                 POST /token/refresh (TokenController)
+│   │   └── token                 POST /auth/refresh (TokenController)
 │   │       ├── controller  dto/request  entity
 │   │       ├── repository  scheduler  service  service/impl
-│   ├── member                    GET/PATCH/DELETE /members/me
+│   ├── member                    GET/PATCH/DELETE /members/me, GET /members/{id}
 │   │   ├── controller  dto  dto/request  dto/response  entity  event  exception
 │   │   ├── repository  scheduler  service  service/impl
 │   ├── interestcar               GET/PUT /members/me/interest-cars
@@ -62,11 +62,12 @@ ijiri.ijiriserver
 │   │   ├── repository  service  service/impl
 │   ├── carmodel                  GET /car-models, /car-models/{id}; model / generation / trim master
 │   │                             imported from resources/car-master/car_master.csv at startup
-│   │                             (insert-only); BuildDirection enum
+│   │                             (insert-only); BuildStyle enum
 │   ├── ownedcar                  GET/POST /members/me/cars, PATCH/DELETE /members/me/cars/{id}
 │   ├── part                      GET /parts/suggest, /parts, /brands (Part, Brand, PartCategory)
-│   ├── upload                    POST /uploads/images; ImageStorageClient (LocalImageStorageClient),
-│   │                             UploadedImageCleanupScheduler
+│   ├── upload                    POST /uploads/images (upload URLs); ImageStorageClient
+│   │                             (DbImageStorageClient: PUT /uploads/files/**, GET /images/** via
+│   │                             ImageFileController), UploadedImageCleanupScheduler
 │   ├── post                      POST /posts, GET/PATCH/DELETE /posts/{id}, GET /feed,
 │   │                             GET /members/{id}/posts (PostController, FeedController)
 │   ├── wishlist                  POST /wishlist, DELETE /wishlist/{id}, GET /members/me/wishlist
@@ -76,24 +77,29 @@ ijiri.ijiriserver
 └── global
     ├── config                    SecurityConfig, SwaggerConfig, ClockConfig (Asia/Seoul Clock + auditing),
     │                             HttpClientConfig (timeouts for external APIs),
-    │                             WebConfig (serves local uploads at /images/**)
+    │                             JacksonConfig (LocalDateTime as ISO 8601 with +09:00)
     ├── entity                    BaseTimeEntity
     ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
     │                             CustomErrorController (/error -> BaseResponse)
     ├── jwt                       JwtProvider, JwtAuthenticationFilter, JwtCookieManager, SessionValidator
     ├── ratelimit                 RateLimiter (in-memory fixed window)
     ├── response                  BaseResponse
-    ├── security                  401/403 handlers returning BaseResponse
+    ├── security                  401/403 handlers returning BaseResponse, AdminVerifier
+    ├── storage                   ImageUrlResolver (image key <-> public URL)
     └── validation                @MaxUtf8Bytes
 ```
 
 Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`), `car-master/car_master.csv`
 the car master data.
 
-Domain dependencies (no cycles): `post` -> `ownedcar`, `carmodel`, `part`, `upload`, `block`, `wishlist`,
-`member`; `report` -> `post`, `member`; `ownedcar`/`interestcar` -> `carmodel`, `member`; `wishlist` -> `part`.
-`upload`, `part`, `carmodel` depend on no other domain service. Shared value types used by several domains
-(e.g. `BuildDirection`) live in the lowest domain (`carmodel`). Within the `post` aggregate, `post_image` and
+Domain dependencies (no cycles): `post` -> `ownedcar`, `carmodel`, `interestcar`, `part`, `upload`, `block`,
+`member`; `wishlist` -> `post`, `member`; `report` -> `post`, `member`; `ownedcar`/`interestcar` -> `carmodel`,
+`member`. `upload`, `part`, `carmodel` depend on no other domain service. When a lower domain needs data from a
+higher one, it declares a small reader interface that the higher domain implements with a repository-only
+component (`MemberPostCounter`, `MemberWishCounter`, `OwnedCarPostCounter`, `PostWishReader`, implemented by
+`PostCountProvider` and `WishCountProvider`); higher domains notify lower ones with events
+(`PostDeletedEvent`, `PostPartsRemovedEvent`). Shared value types used by several domains
+(e.g. `BuildStyle`) live in the lowest domain (`carmodel`). Within the `post` aggregate, `post_image` and
 `post_part_tag` use JPA relations and FKs; across domains there are only id columns.
 
 Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
@@ -151,7 +157,8 @@ Package rules:
   (`AuthResponse.tokens(...)`, `AuthResponse.message(...)`) and `@JsonInclude(NON_NULL)` when fields are
   optional. Do not create a response class per API.
 - Status code enum per domain: `XxxStatusCode implements StatusCode`.
-- Auth naming: `signin` / `signout` / `signup`, never `login` / `logout`.
+- Auth naming in code: `signIn` / `signOut` / `signup`. URL paths follow the feature spec
+  (`/auth/login`, `/auth/login/email`, `/auth/logout`, `/auth/refresh`).
 
 ### Java style
 - Max line length 120. 4-space indentation, no tabs, no wildcard imports, no unused imports.
@@ -193,16 +200,23 @@ Package rules:
   enum columns.
 
 ### API
-- Every response, success and error, goes through `BaseResponse<T>`.
-  - Success: `BaseResponse.ok(data)` or `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, data)`;
-    `data` is always a response DTO, never `null`.
+- Paths, request/response fields and error code names follow the feature spec (기능 명세); every response
+  body still goes through `BaseResponse<T>` (`{code, message, result}`).
+  - Success with data: `BaseResponse.ok(data)` or `BaseResponse.of(XxxStatusCode.SOME_SUCCESS, data)`;
+    `data` is always a response DTO, never `null`. Where the spec says 204, the controller method is `void`
+    with `@ResponseStatus(HttpStatus.NO_CONTENT)` and the service returns `void`.
+  - Lists: `{items, nextCursor}`; `nextCursor` is a string (the last id), `null` on the last page; requests
+    take `?cursor=&size=` (size max 50).
   - Error: `BaseResponse.onFailure(statusCode[, detail])`, produced only by `GlobalExceptionHandler` and
-    the handlers in `global/security`. Only these (and `CustomErrorController`) return
-    `ResponseEntity<BaseResponse<?>>`.
-  - Never return raw DTOs, entities, `ResponseEntity<Dto>`, `void`, or Spring's default error body.
-- Controller-facing service methods return the domain's response DTO (use `XxxResponse.message(...)`
-  when there is nothing else). Internal service-to-service methods may return primitives or `void`.
-- Status codes: `<DOMAIN><HTTP status>[<seq>]`, e.g. `AUTH200`, `AUTH4011`, `MEMBER404`.
+    the handlers in `global/security`. Extra error fields (`fields`, `retryAfterSeconds`,
+    `remainingAttempts`) go in `result` via `new CustomException(code, Map.of(...))`.
+  - `ResponseEntity` only in the error handlers, `CustomErrorController`, `POST /wishlist` (201 vs 200) and
+    `ImageFileController` (stands in for the storage: raw file upload/download, no `BaseResponse`).
+  - Never return raw DTOs, entities or Spring's default error body.
+- Status codes: the spec's code names (`INVALID_CREDENTIALS`, `NOT_FOUND`, `VALIDATION_FAILED`, ...). Generic
+  cases reuse the generic name (`NOT_FOUND` for every 404, `FORBIDDEN` for every 403 permission error);
+  domain-only cases use an UPPER_SNAKE name (`NICKNAME_ALREADY_EXISTS`). The app picks text by `code`.
+- Times are serialized as ISO 8601 with the Korean offset (`2026-09-30T20:00:00+09:00`, `JacksonConfig`).
 - Business errors: `throw new CustomException(XxxStatusCode.SOME_ERROR)`.
 - Validate request bodies with `@Valid` + Bean Validation on the request record.
 - Authenticated member id: `@Parameter(hidden = true) @AuthenticationPrincipal String memberId`.
@@ -226,69 +240,84 @@ These are invariants. Do not change them without being asked, and keep this sect
   (sign-out, login elsewhere, withdrawal) invalidates paired access tokens immediately.
 - Refresh tokens are stored as SHA-256 hashes only and rotated on reissue (atomic delete). A token no longer
   stored is simply rejected (no revoke-all). Expired rows are purged daily by `RefreshTokenCleanupScheduler`.
-- Sign-out (`/auth/signout`, permitted in `SecurityConfig`): with a valid access token, delete all the
-  member's refresh tokens; otherwise delete the session of the refresh token from the body or cookie
-  (so sign-out works after the access token expires; apps send it in the body, web sends the HttpOnly
-  cookie). Expire both cookies and answer 200 (`AUTH2002`) whenever a token was sent, even if its session
-  is already gone. With no token at all the caller is not signed in: 401 `AUTH4012` (same as refresh). Anonymous authentication
-  is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
+- Sign-out (`/auth/logout`; all of `/auth/**` is permitted in `SecurityConfig`): with a valid access token,
+  delete all the member's refresh tokens; otherwise delete the session of the refresh token from the body or
+  cookie (so sign-out works after the access token expires; apps send it in the body, web sends the HttpOnly
+  cookie). Expire both cookies and answer 204 whenever a token was sent, even if its session is already gone.
+  With no token at all the caller is not signed in: 401 `INVALID_REFRESH_TOKEN` (same as refresh).
+  Anonymous authentication is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
   Withdrawal also expires the cookies.
-- Withdrawal is a soft delete (`member.deleted_at`) that also clears `member.email` and turns the member's
-  posts `AUTHOR_WITHDRAWN` (hidden). A withdrawn member cannot sign in or re-register with
-  the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn members (refresh is `AUTH4012`,
-  not 404). `MemberPurgeScheduler` hard-deletes after 30 days, one transaction per member,
-  including posts, uploaded image files, owned/interest cars, wishlist, blocks and reports. Kakao unlink runs
+- Withdrawal (`DELETE /members/me`, 204) is a soft delete (`member.deleted_at`) that also clears
+  `member.email`, turns the member's posts `AUTHOR_WITHDRAWN` and hides their wishes from wish counts.
+  A withdrawn member cannot sign in or re-register with the same account for 30 days (`MEMBER_WITHDRAWN`);
+  `getById` excludes withdrawn members (refresh is `INVALID_REFRESH_TOKEN`, not 404). `MemberPurgeScheduler`
+  runs daily at 04:00, reads targets 100 at a time and hard-deletes one transaction per member, in listener
+  order wishlist (`@Order(0)`) -> posts with parts/tags (1) -> uploads and files (2) -> owned cars (3) ->
+  others -> member row. Kakao unlink runs
   after the withdrawal commit and is retried before the purge if it fails.
 - Member identity = `provider + provider_member_id` (unique). Email members use `provider = EMAIL`,
   `provider_member_id = email`; passwords are BCrypt hashes.
-- Email sign-up: send code -> verify code -> sign up. 6-digit code bound to the email, valid 5 min,
-  5 attempts, 60 s resend cooldown (resend resets verification; the row is locked against concurrent resends).
-  Verification gives 30 min to sign up; sign-up atomically consumes the verified row, creates the member and
-  signs in (`isNewMember = true`). For an already registered email the send API answers identically and only
-  a notice mail is sent (no account enumeration).
-- Email sign-in errors are always `AUTH4013`. 5 failures per email (registered or not) within 15 min lock that
-  email until the window ends (`AUTH4293`); success or password reset clears the count.
+- Email sign-up: `send-code` (204) -> `verify-code` -> `signup`. 6-digit code bound to the email + purpose,
+  valid 5 min, 5 wrong attempts invalidate it (`INVALID_VERIFICATION_CODE` with `remainingAttempts`), 60 s
+  resend cooldown (`TOO_MANY_REQUESTS` with `retryAfterSeconds`; resend resets verification; the row is locked
+  against concurrent resends). A correct code returns a `verificationToken` (10 min, single use, stored as a
+  SHA-256 hash); sign-up consumes it in the same transaction that creates the member and signs in
+  (`isNewMember = true`, 200). For an already registered email `send-code` answers `EMAIL_ALREADY_EXISTS`
+  (spec decision: the app links to sign-in).
+- Sign-up requires the three consents (`agreements.age14/terms/privacy` all true) and a unique nickname
+  (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`). Social sign-up appends 4 digits when the nickname
+  is taken.
+- Email sign-in errors are always `INVALID_CREDENTIALS`. 5 failures per email (registered or not) within
+  15 min lock that email until the window ends (423 `ACCOUNT_LOCKED` with `retryAfterSeconds`); success or
+  password reset clears the count. The lock duration is still an open question in the spec.
 - Rate limits (`RateLimiter`): sign-in 30 / 15 min per IP; verification-code 10 / h per IP; image upload
   100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
-- Password reset: send code with `purpose = RESET_PASSWORD` -> verify -> `POST /auth/password/reset`.
-  Verification rows are unique per (email, purpose). For an email that is not an active email member the send
-  API answers identically and sends nothing. Reset consumes the verification, changes the password and deletes
-  all the member's sessions in one transaction.
+- Password reset: `send-code` with `purpose = RESET_PASSWORD` -> `verify-code` -> `POST /auth/password/reset`
+  with the `verificationToken` (204). For an email that is not an active email member `send-code` still
+  answers 204 and sends nothing. Reset consumes the token, changes the password and deletes all the member's
+  sessions in one transaction.
 - Suspension: `PATCH /admin/reports/{id}` with `SUSPEND_MEMBER` sets `member.suspended_until` and deletes the
-  member's sessions; `TokenService.issue` rejects suspended members (`MEMBER4031`), covering every sign-in and
+  member's sessions; `TokenService.issue` rejects suspended members (`MEMBER_SUSPENDED`), covering every sign-in and
   refresh.
-- Admin: `/admin/**` requires role `ADMIN` (from the access token's `role` claim; a role change applies after
-  the next sign-in). Admins are assigned directly in the database.
-- Public GET endpoints: `/car-models/**`, `/feed`, `/posts/{id}`, `/members/{id}/posts`, `/images/**`.
-  When authenticated they also exclude posts of members in a block relation (either direction).
-- Uploads: max 10 MB, format detected from file signature (JPEG, PNG, WebP, HEIC), random UUID file names.
-  Images not attached to a post or profile within 24 h are deleted with their files. EXIF GPS is stripped by
-  the app before upload.
-- Sign-up fields: email, password, nickname 2-12 chars. Required consents are client-gated only.
+- Admin: `/admin/**` checks the member's current role in the DB on every request (`AdminVerifier`), not the
+  token's `role` claim. Admins sign up normally and get `role = ADMIN` set in the DB. Report processing
+  records who (`resolved_by`), when and what.
+- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`, `/images/**`; PUT
+  `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
+  detail also exclude posts of members in a block relation (either direction).
+- Uploads: `POST /uploads/images` returns per image an `imageKey` and a 10-min `uploadUrl`; the app PUTs the
+  file there (<= 10 MB, Content-Type as requested, verified against the file signature; JPEG APP1/EXIF is
+  stripped). With the DB storage the URL is this server signed with HMAC-SHA256 over key, type and expiry.
+  Images not attached to a post (`posts/tmp/`) or profile (`profiles/tmp/`) within 10 min are deleted.
+- Posts reference only the member's own owned car (`FORBIDDEN` otherwise); wishes reference `postPartId`,
+  are removed with the post or part, and the author's own wishes are not counted.
 - Passwords: 8-20 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
   Social nicknames: longer than 12 are cut to 12; missing or shorter than 2 get `이지리오너` + 4 digits.
-- Kakao API: only 400/401 mean an invalid provider token (`AUTH4011`); other errors are `AUTH502`.
+- Kakao API: only 400/401 mean an invalid provider token (`INVALID_PROVIDER_TOKEN`); other errors are
+  `SOCIAL_SERVER_ERROR`. `APPLE` exists as a provider value but has no verifier yet (`UNSUPPORTED_PROVIDER`).
 - Secrets come from `.env` (never commit it). Never log passwords, tokens, or secrets.
 - Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
-  every secret required, no fallbacks, forwarded headers for client IP), `test` (Testcontainers PostgreSQL, tests only).
+  every secret required, no fallbacks, forwarded headers for client IP), `test` (Testcontainers
+  PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
 ## Operational notes
 
 Not problems today; revisit when the deployment changes.
 
-- `RateLimiter` and the registered-email notice cooldown are in memory: with several instances each counts
+- `RateLimiter`, the sign-in lock and the silent reset-code cooldown are in memory: with several instances each counts
   separately. Move them to Redis when scaling out.
 - Every authenticated request looks up `session_id` once; add a cache if traffic grows.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
   Check against the actual deployment.
-- Uploaded images are stored on local disk (`storage.local.base-dir`) and served by the app. With several
-  instances or ephemeral disks, add an S3-compatible `ImageStorageClient` and drop `WebConfig`. Post images
-  store absolute URLs, so changing `storage.public-base-url` needs a data migration.
-- Part suggest uses `pg_trgm` similarity (keyword + typo tolerance). Vector (embedding) search is not
-  implemented yet; it needs an embedding provider and `pgvector`.
+- Image files are stored in the DB (`image_file`) and served by `ImageFileController` for now. When deploying
+  (AWS S3 or GCS), add an `ImageStorageClient` that issues real presigned URLs, point
+  `storage.public-base-url` at the bucket/CDN, and drop `DbImageStorageClient`, `ImageFileController` and
+  `image_file`. Post images store absolute URLs, so changing the base URL needs a data migration.
+- Part suggest uses keyword/alias match plus `pg_trgm` similarity. Vector (embedding) search from the spec
+  is not implemented yet; it needs a multilingual embedding provider and `pgvector`.
 - If Kakao unlink fails after withdrawal, the link stays visible in the user's Kakao account until the purge
   retry (up to 30 days).
 

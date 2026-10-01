@@ -42,7 +42,7 @@ ijiri.ijiriserver
 │   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout,
+│   │   ├── email                 POST /auth/signup, /auth/signin, /auth/signout, /auth/password/reset,
 │   │   │   │                     /auth/email/verification-code, /auth/email/verification-code/verify
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
@@ -54,15 +54,29 @@ ijiri.ijiriserver
 │   │   └── token                 POST /token/refresh (TokenController)
 │   │       ├── controller  dto/request  entity
 │   │       ├── repository  scheduler  service  service/impl
-│   ├── member                    GET/DELETE /members/me
-│   │   ├── controller  dto  dto/response  entity  event  exception
+│   ├── member                    GET/PATCH/DELETE /members/me
+│   │   ├── controller  dto  dto/request  dto/response  entity  event  exception
 │   │   ├── repository  scheduler  service  service/impl
-│   └── interestcar               PUT /members/me/interest-cars
-│       ├── controller  dto/request  dto/response  entity  exception
-│       ├── repository  service  service/impl
+│   ├── interestcar               GET/PUT /members/me/interest-cars
+│   │   ├── controller  dto/request  dto/response  entity  exception
+│   │   ├── repository  service  service/impl
+│   ├── carmodel                  GET /car-models, /car-models/{id}; model / generation / trim master
+│   │                             imported from resources/car-master/car_master.csv at startup
+│   │                             (insert-only); BuildDirection enum
+│   ├── ownedcar                  GET/POST /members/me/cars, PATCH/DELETE /members/me/cars/{id}
+│   ├── part                      GET /parts/suggest, /parts, /brands (Part, Brand, PartCategory)
+│   ├── upload                    POST /uploads/images; ImageStorageClient (LocalImageStorageClient),
+│   │                             UploadedImageCleanupScheduler
+│   ├── post                      POST /posts, GET/PATCH/DELETE /posts/{id}, GET /feed,
+│   │                             GET /members/{id}/posts (PostController, FeedController)
+│   ├── wishlist                  POST /wishlist, DELETE /wishlist/{id}, GET /members/me/wishlist
+│   ├── block                     POST/DELETE /members/{id}/block, GET /members/me/blocks
+│   └── report                    POST /reports; GET /admin/reports, PATCH /admin/reports/{id}
+│                                 (AdminReportController)
 └── global
     ├── config                    SecurityConfig, SwaggerConfig, ClockConfig (Asia/Seoul Clock + auditing),
-    │                             HttpClientConfig (timeouts for external APIs)
+    │                             HttpClientConfig (timeouts for external APIs),
+    │                             WebConfig (serves local uploads at /images/**)
     ├── entity                    BaseTimeEntity
     ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
     │                             CustomErrorController (/error -> BaseResponse)
@@ -73,11 +87,20 @@ ijiri.ijiriserver
     └── validation                @MaxUtf8Bytes
 ```
 
-Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`).
+Resources: `db/migration` holds the Flyway migrations (`V{n}__description.sql`), `car-master/car_master.csv`
+the car master data.
+
+Domain dependencies (no cycles): `post` -> `ownedcar`, `carmodel`, `part`, `upload`, `block`, `wishlist`,
+`member`; `report` -> `post`, `member`; `ownedcar`/`interestcar` -> `carmodel`, `member`; `wishlist` -> `part`.
+`upload`, `part`, `carmodel` depend on no other domain service. Shared value types used by several domains
+(e.g. `BuildDirection`) live in the lowest domain (`carmodel`). Within the `post` aggregate, `post_image` and
+`post_part_tag` use JPA relations and FKs; across domains there are only id columns.
+
 Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
 with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
 `@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc
-integration tests through the real filter chain (`AuthFlowIntegrationTest`); extend them when changing
+integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
+`CommunityFlowIntegrationTest`); extend them when changing
 `SecurityConfig` paths or the auth flow. Rate limits are in memory and shared across tests in one context,
 so integration tests give each request its own remote IP.
 
@@ -96,10 +119,12 @@ Package rules:
   (returns `MemberRegisterCommand`; plus `SocialUnlinkClient` if needed) and a `Provider` enum value;
   `OAuthService` picks it up automatically. Do not modify existing providers.
 - **Cross-domain cleanup** goes through member events; `member` never calls other domains' services
-  (no package cycles).
+  (no package cycles). `MemberSuspendedEvent` revokes sessions; `MemberProfileImageChangedEvent` lets `upload`
+  verify the new profile image (exception rolls the change back) and delete the previous file.
   - `MemberWithdrawnEvent` (soft delete): immediate actions (revoke tokens, social unlink, hide posts).
-    External API calls listen with `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold
-    a DB connection; they catch and log failures, and anything that must eventually succeed is retried
+    Bulk updates in these listeners must not clear the persistence context (`clearAutomatically`), or the
+    member change in the same transaction is lost. External API calls listen with
+    `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold a DB connection; they catch and log failures, and anything that must eventually succeed is retried
     from a `MemberPurgedEvent` listener (e.g. Kakao unlink).
   - `MemberPurgedEvent` (hard delete after 30 days): delete the member's data, including stored files.
     Listeners must be idempotent (a failure rolls back and retries).
@@ -208,9 +233,11 @@ These are invariants. Do not change them without being asked, and keep this sect
   is already gone. With no token at all the caller is not signed in: 401 `AUTH4012` (same as refresh). Anonymous authentication
   is disabled, so `@AuthenticationPrincipal` is `null` when unauthenticated.
   Withdrawal also expires the cookies.
-- Withdrawal is a soft delete (`member.deleted_at`). A withdrawn member cannot sign in or re-register with
+- Withdrawal is a soft delete (`member.deleted_at`) that also clears `member.email` and turns the member's
+  posts `AUTHOR_WITHDRAWN` (hidden). A withdrawn member cannot sign in or re-register with
   the same account for 30 days (`MEMBER403`); `getById` excludes withdrawn members (refresh is `AUTH4012`,
-  not 404). `MemberPurgeScheduler` hard-deletes after 30 days, one transaction per member. Kakao unlink runs
+  not 404). `MemberPurgeScheduler` hard-deletes after 30 days, one transaction per member,
+  including posts, uploaded image files, owned/interest cars, wishlist, blocks and reports. Kakao unlink runs
   after the withdrawal commit and is retried before the purge if it fails.
 - Member identity = `provider + provider_member_id` (unique). Email members use `provider = EMAIL`,
   `provider_member_id = email`; passwords are BCrypt hashes.
@@ -219,8 +246,24 @@ These are invariants. Do not change them without being asked, and keep this sect
   Verification gives 30 min to sign up; sign-up atomically consumes the verified row, creates the member and
   signs in (`isNewMember = true`). For an already registered email the send API answers identically and only
   a notice mail is sent (no account enumeration).
-- Rate limits (`RateLimiter`): sign-in 10 / 15 min per email and 30 / 15 min per IP; verification-code
-  10 / h per IP. Unknown-email sign-in still runs a BCrypt compare.
+- Email sign-in errors are always `AUTH4013`. 5 failures per email (registered or not) within 15 min lock that
+  email until the window ends (`AUTH4293`); success or password reset clears the count.
+- Rate limits (`RateLimiter`): sign-in 30 / 15 min per IP; verification-code 10 / h per IP; image upload
+  100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
+- Password reset: send code with `purpose = RESET_PASSWORD` -> verify -> `POST /auth/password/reset`.
+  Verification rows are unique per (email, purpose). For an email that is not an active email member the send
+  API answers identically and sends nothing. Reset consumes the verification, changes the password and deletes
+  all the member's sessions in one transaction.
+- Suspension: `PATCH /admin/reports/{id}` with `SUSPEND_MEMBER` sets `member.suspended_until` and deletes the
+  member's sessions; `TokenService.issue` rejects suspended members (`MEMBER4031`), covering every sign-in and
+  refresh.
+- Admin: `/admin/**` requires role `ADMIN` (from the access token's `role` claim; a role change applies after
+  the next sign-in). Admins are assigned directly in the database.
+- Public GET endpoints: `/car-models/**`, `/feed`, `/posts/{id}`, `/members/{id}/posts`, `/images/**`.
+  When authenticated they also exclude posts of members in a block relation (either direction).
+- Uploads: max 10 MB, format detected from file signature (JPEG, PNG, WebP, HEIC), random UUID file names.
+  Images not attached to a post or profile within 24 h are deleted with their files. EXIF GPS is stripped by
+  the app before upload.
 - Sign-up fields: email, password, nickname 2-12 chars. Required consents are client-gated only.
 - Passwords: 8-20 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
@@ -228,7 +271,7 @@ These are invariants. Do not change them without being asked, and keep this sect
 - Kakao API: only 400/401 mean an invalid provider token (`AUTH4011`); other errors are `AUTH502`.
 - Secrets come from `.env` (never commit it). Never log passwords, tokens, or secrets.
 - Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
-  every secret required, no fallbacks, forwarded headers for client IP), `test` (H2, tests only).
+  every secret required, no fallbacks, forwarded headers for client IP), `test` (Testcontainers PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
 ## Operational notes
@@ -241,6 +284,11 @@ Not problems today; revisit when the deployment changes.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
   Check against the actual deployment.
+- Uploaded images are stored on local disk (`storage.local.base-dir`) and served by the app. With several
+  instances or ephemeral disks, add an S3-compatible `ImageStorageClient` and drop `WebConfig`. Post images
+  store absolute URLs, so changing `storage.public-base-url` needs a data migration.
+- Part suggest uses `pg_trgm` similarity (keyword + typo tolerance). Vector (embedding) search is not
+  implemented yet; it needs an embedding provider and `pgvector`.
 - If Kakao unlink fails after withdrawal, the link stays visible in the user's Kakao account until the purge
   retry (up to 30 days).
 

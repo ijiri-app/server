@@ -61,7 +61,13 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                "/images/**",
+                                "/car-models",
+                                "/car-models/*",
+                                "/feed",
+                                "/posts/*",
+                                "/members/*/posts"
                         ).permitAll()
                         .requestMatchers(
                                 HttpMethod.POST,
@@ -71,11 +77,14 @@ public class SecurityConfig {
                                 "/auth/email/verification-code/verify",
                                 "/auth/signin",
                                 "/token/refresh",
-                                "/auth/signout"
+                                "/auth/signout",
+                                "/auth/password/reset"
                         ).permitAll()
                         .requestMatchers(
                                 "/error"
                         ).permitAll()
+                        // 역할은 access token 의 role 클레임에서 온다. 역할을 바꾸면 다시 로그인해야 반영된다
+                        .requestMatchers("/admin/**").hasRole("ADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(e -> e

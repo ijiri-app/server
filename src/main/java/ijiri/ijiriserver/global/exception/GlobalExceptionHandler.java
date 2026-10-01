@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.LinkedHashMap;
@@ -74,6 +76,7 @@ public class GlobalExceptionHandler {
             MissingServletRequestParameterException.class,
             MissingRequestHeaderException.class,
             MissingRequestCookieException.class,
+            MissingServletRequestPartException.class,
             MethodArgumentTypeMismatchException.class
     })
     public ResponseEntity<BaseResponse<Void>> handleBadRequest(Exception e) {
@@ -88,6 +91,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
     public ResponseEntity<BaseResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
         return toResponse(CommonStatusCode.UNSUPPORTED_MEDIA_TYPE);
+    }
+
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<BaseResponse<Void>> handleMaxUploadSizeExceeded(MaxUploadSizeExceededException e) {
+        return toResponse(CommonStatusCode.PAYLOAD_TOO_LARGE);
     }
 
     @ExceptionHandler(NoResourceFoundException.class)

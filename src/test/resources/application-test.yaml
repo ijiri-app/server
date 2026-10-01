@@ -21,3 +21,8 @@ oauth:
 
 cors:
   allowed-origins: http://localhost:3000
+
+storage:
+  local:
+    base-dir: ${java.io.tmpdir}/ijiri-test-uploads
+  public-base-url: http://localhost

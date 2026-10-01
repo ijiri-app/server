@@ -67,8 +67,31 @@ public class Member extends BaseTimeEntity {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+    // 관리자가 정지한 기한. 이 시각 전에는 로그인(토큰 발급)할 수 없다
+    @Column(name = "suspended_until")
+    private LocalDateTime suspendedUntil;
+
+    // 재가입 제한에는 provider + providerMemberId 만 쓰므로, 보관 기간 동안 연락처인 이메일은 남기지 않는다
     public void withdraw(LocalDateTime now) {
         this.deletedAt = now;
+        this.email = null;
+    }
+
+    public void updateProfile(String nickname, String profileImageUrl) {
+        this.nickname = nickname;
+        this.profileImageUrl = profileImageUrl;
+    }
+
+    public void changePassword(String encodedPassword) {
+        this.password = encodedPassword;
+    }
+
+    public void suspend(LocalDateTime until) {
+        this.suspendedUntil = until;
+    }
+
+    public boolean isSuspended(LocalDateTime now) {
+        return suspendedUntil != null && suspendedUntil.isAfter(now);
     }
 
     public boolean isWithdrawn() {

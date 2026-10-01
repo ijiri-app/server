@@ -3,11 +3,14 @@ package ijiri.ijiriserver.domain.member.service.impl;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.dto.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.dto.MemberSignupCommand;
+import ijiri.ijiriserver.domain.member.dto.request.MemberUpdateRequest;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.domain.member.entity.Role;
+import ijiri.ijiriserver.domain.member.event.MemberProfileImageChangedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
+import ijiri.ijiriserver.domain.member.event.MemberSuspendedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.repository.MemberRepository;
@@ -21,7 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -55,6 +60,26 @@ public class MemberServiceImpl implements MemberService {
     @Override
     public Optional<Member> findActiveMember(Long memberId) {
         return memberRepository.findByIdAndDeletedAtIsNull(memberId);
+    }
+
+    @Override
+    public List<Member> getActiveMembers(Collection<Long> memberIds) {
+        return memberRepository.findAllByIdInAndDeletedAtIsNull(memberIds);
+    }
+
+    // 프로필 사진은 업로드 도메인이 이벤트를 받아 이 회원이 올린 사진인지 확인한다 (아니면 예외로 롤백)
+    @Override
+    @Transactional
+    public MemberResponse updateProfile(Long memberId, MemberUpdateRequest request) {
+        Member member = getById(memberId);
+        String previousUrl = member.getProfileImageUrl();
+        String nickname = request.nickname() != null ? request.nickname() : member.getNickname();
+        String profileImageUrl = resolveProfileImageUrl(previousUrl, request.profileImageUrl());
+        member.updateProfile(nickname, profileImageUrl);
+        if (!Objects.equals(previousUrl, profileImageUrl)) {
+            eventPublisher.publishEvent(new MemberProfileImageChangedEvent(memberId, previousUrl, profileImageUrl));
+        }
+        return MemberResponse.from(member);
     }
 
     @Override
@@ -98,8 +123,18 @@ public class MemberServiceImpl implements MemberService {
         return memberRepository.findByProviderAndProviderMemberId(Provider.EMAIL, email);
     }
 
+    @Override
+    @Transactional
+    public Long changePassword(String email, String encodedPassword) {
+        Member member = findEmailMember(email)
+                .filter(found -> !found.isWithdrawn())
+                .orElseThrow(() -> new CustomException(MemberStatusCode.MEMBER_NOT_FOUND));
+        member.changePassword(encodedPassword);
+        return member.getId();
+    }
+
     // soft delete: 행은 보관 기간 동안 남기고, 즉시 처리할 일(토큰 폐기, 소셜 연결 끊기 등)은 이벤트로 넘긴다.
-    // 소셜 연결 끊기는 커밋 직전에 실행되어, 실패하면 탈퇴 전체가 롤백되고 다시 시도할 수 있다
+    // 소셜 연결 끊기처럼 외부 API 를 부르는 일은 커밋 뒤에 실행되고, 실패하면 영구 삭제 전에 다시 시도한다
     @Override
     @Transactional
     public MemberResponse withdraw(Long memberId) {
@@ -111,6 +146,13 @@ public class MemberServiceImpl implements MemberService {
                 member.getProviderMemberId()
         ));
         return MemberResponse.from(member);
+    }
+
+    @Override
+    @Transactional
+    public void suspend(Long memberId, LocalDateTime until) {
+        getById(memberId).suspend(until);
+        eventPublisher.publishEvent(new MemberSuspendedEvent(memberId));
     }
 
     @Override
@@ -133,6 +175,14 @@ public class MemberServiceImpl implements MemberService {
                     ));
                     memberRepository.delete(member);
                 });
+    }
+
+    // null 이면 그대로, 빈 문자열이면 삭제
+    private String resolveProfileImageUrl(String current, String requested) {
+        if (requested == null) {
+            return current;
+        }
+        return requested.isBlank() ? null : requested;
     }
 
     private boolean existsEmailMember(String email) {

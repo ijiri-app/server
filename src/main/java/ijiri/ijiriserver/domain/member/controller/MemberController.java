@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.member.controller;
 
+import ijiri.ijiriserver.domain.member.dto.request.MemberUpdateRequest;
 import ijiri.ijiriserver.domain.member.dto.response.MemberResponse;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
@@ -9,10 +10,13 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -36,8 +40,24 @@ public class MemberController {
     }
 
     @Operation(
+            summary = "내 프로필 수정",
+            description = "닉네임, 프로필 사진(업로드한 사진 url). 보낸 필드만 바뀐다"
+    )
+    @PatchMapping("/me")
+    public BaseResponse<MemberResponse> updateMe(
+            @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
+            @Valid @RequestBody MemberUpdateRequest request
+    ) {
+        return BaseResponse.of(
+                MemberStatusCode.UPDATE_SUCCESS,
+                memberService.updateProfile(Long.valueOf(memberId), request)
+        );
+    }
+
+    @Operation(
             summary = "회원 탈퇴",
-            description = "카카오 회원은 카카오 연결 끊기까지 함께 처리. 토큰 쿠키도 만료"
+            description = "즉시 세션 폐기, 카카오 연결 끊기, 게시물 비공개, 이메일 삭제. "
+                    + "30일 뒤 게시물·사진 파일 등 모든 데이터를 완전히 삭제한다. 토큰 쿠키도 만료"
     )
     @DeleteMapping("/me")
     public BaseResponse<MemberResponse> withdraw(

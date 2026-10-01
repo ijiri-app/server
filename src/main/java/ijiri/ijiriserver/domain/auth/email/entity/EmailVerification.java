@@ -3,6 +3,8 @@ package ijiri.ijiriserver.domain.auth.email.entity;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -17,9 +19,9 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 
 /**
- * 이메일당 한 줄. 코드 재발송 시 같은 행을 갱신한다.
- * 코드가 맞으면 인증 완료(verifiedAt)로 바꾸고 만료 시각을 가입 가능 기한으로 늘린다.
- * 가입에 성공하면 삭제해 한 번의 인증으로 한 번만 가입할 수 있게 한다.
+ * 이메일 + 용도(가입, 비밀번호 재설정)당 한 줄. 코드 재발송 시 같은 행을 갱신한다.
+ * 코드가 맞으면 인증 완료(verifiedAt)로 바꾸고 만료 시각을 가입(재설정) 가능 기한으로 늘린다.
+ * 가입(재설정)에 성공하면 삭제해 한 번의 인증을 한 번만 쓸 수 있게 한다.
  */
 @Entity
 @Getter
@@ -28,7 +30,10 @@ import java.time.LocalDateTime;
 @Builder
 @Table(
         name = "email_verification",
-        uniqueConstraints = @UniqueConstraint(name = "uk_email_verification_email", columnNames = "email")
+        uniqueConstraints = @UniqueConstraint(
+                name = "uk_email_verification_email_purpose",
+                columnNames = {"email", "purpose"}
+        )
 )
 public class EmailVerification extends BaseTimeEntity {
 
@@ -38,6 +43,10 @@ public class EmailVerification extends BaseTimeEntity {
 
     @Column(name = "email", nullable = false, updatable = false)
     private String email;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "purpose", nullable = false, length = 20, updatable = false)
+    private VerificationPurpose purpose;
 
     @Column(name = "code", nullable = false, length = 6)
     private String code;
@@ -56,9 +65,16 @@ public class EmailVerification extends BaseTimeEntity {
     @Column(name = "verified_at")
     private LocalDateTime verifiedAt;
 
-    public static EmailVerification of(String email, String code, LocalDateTime now, LocalDateTime expiresAt) {
+    public static EmailVerification of(
+            String email,
+            VerificationPurpose purpose,
+            String code,
+            LocalDateTime now,
+            LocalDateTime expiresAt
+    ) {
         return EmailVerification.builder()
                 .email(email)
+                .purpose(purpose)
                 .code(code)
                 .sentAt(now)
                 .expiresAt(expiresAt)

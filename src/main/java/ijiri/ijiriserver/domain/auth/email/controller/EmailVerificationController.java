@@ -37,7 +37,8 @@ public class EmailVerificationController {
 
     @Operation(
             summary = "인증 코드 발송",
-            description = "숫자 6자리 코드를 발송. 5분간 유효. 재발송은 60초 후, IP 당 시간당 10회"
+            description = "숫자 6자리 코드를 발송. 5분간 유효. 재발송은 60초 후, IP 당 시간당 10회. "
+                    + "purpose = SIGNUP(기본) / RESET_PASSWORD. 가입 여부와 무관하게 같은 응답을 준다"
     )
     @PostMapping("/verification-code")
     public BaseResponse<AuthResponse> sendCode(
@@ -47,19 +48,20 @@ public class EmailVerificationController {
         rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
         return BaseResponse.of(
                 AuthStatusCode.VERIFICATION_CODE_SENT,
-                emailVerificationService.sendCode(request.email())
+                emailVerificationService.sendCode(request.email(), request.purpose())
         );
     }
 
     @Operation(
             summary = "인증 코드 확인",
-            description = "코드가 맞으면 이메일 인증 완료. 이후 30분 안에 회원가입해야 한다. 코드당 5회까지 시도"
+            description = "코드가 맞으면 이메일 인증 완료. 이후 30분 안에 회원가입(비밀번호 재설정)해야 한다. "
+                    + "코드당 5회까지 시도"
     )
     @PostMapping("/verification-code/verify")
     public BaseResponse<AuthResponse> verifyCode(@Valid @RequestBody VerificationCodeConfirmRequest request) {
         return BaseResponse.of(
                 AuthStatusCode.EMAIL_VERIFIED,
-                emailVerificationService.verifyCode(request.email(), request.code())
+                emailVerificationService.verifyCode(request.email(), request.code(), request.purpose())
         );
     }
 }

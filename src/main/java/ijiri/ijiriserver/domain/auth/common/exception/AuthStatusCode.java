@@ -15,6 +15,7 @@ public enum AuthStatusCode implements StatusCode {
     SIGNOUT_SUCCESS(HttpStatus.OK, "AUTH2002", "로그아웃되었습니다."),
     VERIFICATION_CODE_SENT(HttpStatus.OK, "AUTH2003", "인증 코드가 발송되었습니다."),
     EMAIL_VERIFIED(HttpStatus.OK, "AUTH2004", "이메일 인증이 완료되었습니다."),
+    PASSWORD_RESET(HttpStatus.OK, "AUTH2005", "비밀번호가 변경되었습니다. 새 비밀번호로 로그인해 주세요."),
     UNSUPPORTED_PROVIDER(HttpStatus.BAD_REQUEST, "AUTH4001", "지원하지 않는 로그인 제공자입니다."),
     INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "AUTH4003", "인증 코드가 올바르지 않습니다."),
     VERIFICATION_CODE_EXPIRED(HttpStatus.BAD_REQUEST, "AUTH4004", "인증 코드가 만료되었습니다. 다시 요청해 주세요."),
@@ -28,6 +29,11 @@ public enum AuthStatusCode implements StatusCode {
             "인증 시도 횟수를 초과했습니다. 코드를 다시 요청해 주세요."
     ),
     VERIFICATION_RESEND_TOO_SOON(HttpStatus.TOO_MANY_REQUESTS, "AUTH4292", "잠시 후 다시 요청해 주세요."),
+    SIGNIN_LOCKED(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "AUTH4293",
+            "로그인에 5회 실패해 15분 동안 로그인할 수 없습니다. 비밀번호를 재설정하거나 잠시 후 다시 시도해 주세요."
+    ),
     SOCIAL_SERVER_ERROR(HttpStatus.BAD_GATEWAY, "AUTH502", "소셜 로그인 서버와 통신에 실패했습니다."),
     EMAIL_SEND_FAILED(HttpStatus.BAD_GATEWAY, "AUTH5021", "인증 메일 발송에 실패했습니다.");
 

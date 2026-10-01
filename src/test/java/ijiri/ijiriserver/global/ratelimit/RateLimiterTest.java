@@ -46,6 +46,19 @@ class RateLimiterTest {
         assertThat(rateLimiter.tryAcquire("b", 1, PERIOD)).isTrue();
     }
 
+    @Test
+    void 한도_도달_여부는_횟수를_늘리지_않고_확인하고_초기화할_수_있다() {
+        RateLimiter rateLimiter = new RateLimiter(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
+        rateLimiter.tryAcquire("key", 2, PERIOD);
+
+        assertThat(rateLimiter.isExhausted("key", 2)).isFalse();
+        rateLimiter.tryAcquire("key", 2, PERIOD);
+        assertThat(rateLimiter.isExhausted("key", 2)).isTrue();
+
+        rateLimiter.reset("key");
+        assertThat(rateLimiter.isExhausted("key", 2)).isFalse();
+    }
+
     private static final class MutableClock extends Clock {
 
         private Instant now;

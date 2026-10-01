@@ -6,7 +6,9 @@ import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.auth.token.repository.RefreshTokenRepository;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
 import ijiri.ijiriserver.domain.member.entity.Member;
+import ijiri.ijiriserver.domain.member.event.MemberSuspendedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
+import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtProvider;
@@ -31,10 +33,14 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
     private final Clock clock;
 
     // 동시 접속 차단: 한 계정은 refresh token 을 하나만 가진다.
-    // 새로 발급할 때 기존 토큰(세션)을 모두 지워, 다른 기기의 access token 도 즉시 거부된다
+    // 새로 발급할 때 기존 토큰(세션)을 모두 지워, 다른 기기의 access token 도 즉시 거부된다.
+    // 모든 로그인·갱신이 여기를 지나므로 이용 정지도 여기서 막는다
     @Override
     @Transactional
     public AuthResponse issue(Member member) {
+        if (member.isSuspended(LocalDateTime.now(clock))) {
+            throw new CustomException(MemberStatusCode.MEMBER_SUSPENDED);
+        }
         String subject = String.valueOf(member.getId());
         String sessionId = UUID.randomUUID().toString();
         String accessToken = jwtProvider.createAccessToken(subject, member.getRole().name(), sessionId);
@@ -88,6 +94,12 @@ public class TokenServiceImpl implements TokenService, SessionValidator {
     @EventListener
     @Transactional
     public void revokeAll(MemberWithdrawnEvent event) {
+        refreshTokenRepository.deleteAllByMemberId(event.memberId());
+    }
+
+    @EventListener
+    @Transactional
+    public void revokeAll(MemberSuspendedEvent event) {
         refreshTokenRepository.deleteAllByMemberId(event.memberId());
     }
 

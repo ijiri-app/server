@@ -28,7 +28,8 @@ public record SignupRequest(
         @NotBlank @Size(min = 2, max = 12) String nickname
 ) {
 
-    private static final String PASSWORD_REGEX = "^(?=.*[A-Za-z])(?=.*\\d).*$";
+    // 비밀번호 재설정도 같은 규칙을 쓴다
+    public static final String PASSWORD_REGEX = "^(?=.*[A-Za-z])(?=.*\\d).*$";
 
     // 대소문자/공백만 다른 이메일로 중복 가입되지 않도록 소문자로 통일
     public SignupRequest {

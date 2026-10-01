@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.controller;
 
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
+import ijiri.ijiriserver.domain.auth.email.dto.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
@@ -62,7 +63,8 @@ public class AuthController {
 
     @Operation(
             summary = "이메일 로그인",
-            description = "이메일, 비밀번호로 로그인. 계정/IP 별로 15분당 시도 횟수 제한"
+            description = "이메일, 비밀번호로 로그인. 오류는 AUTH4013 하나로 응답. "
+                    + "이메일별 15분 안에 5회 실패하면 잠금(AUTH4293), IP 별 15분당 30회 제한"
     )
     @SecurityRequirements
     @PostMapping("/signin")
@@ -75,6 +77,16 @@ public class AuthController {
         AuthResponse response = authService.signIn(request);
         jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, response);
+    }
+
+    @Operation(
+            summary = "비밀번호 재설정",
+            description = "RESET_PASSWORD 용도로 인증 코드 확인을 마친 이메일의 비밀번호를 바꾸고 모든 세션을 끊는다"
+    )
+    @SecurityRequirements
+    @PostMapping("/password/reset")
+    public BaseResponse<AuthResponse> resetPassword(@Valid @RequestBody PasswordResetRequest request) {
+        return BaseResponse.of(AuthStatusCode.PASSWORD_RESET, authService.resetPassword(request));
     }
 
     @Operation(

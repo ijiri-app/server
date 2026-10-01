@@ -12,7 +12,7 @@ class EmailVerificationTest {
 
     @Test
     void 코드를_비교하고_시도마다_횟수가_오른다() {
-        EmailVerification verification = EmailVerification.of("a@b.com", "123456", NOW, NOW.plusMinutes(5));
+        EmailVerification verification = newVerification();
 
         assertThat(verification.matches("000000")).isFalse();
         assertThat(verification.matches("123456")).isTrue();
@@ -21,7 +21,7 @@ class EmailVerificationTest {
 
     @Test
     void 시도_횟수_초과를_판단한다() {
-        EmailVerification verification = EmailVerification.of("a@b.com", "123456", NOW, NOW.plusMinutes(5));
+        EmailVerification verification = newVerification();
         for (int i = 0; i < 5; i++) {
             verification.matches("000000");
         }
@@ -31,7 +31,7 @@ class EmailVerificationTest {
 
     @Test
     void 인증_완료되면_만료_시각이_가입_기한으로_늘어난다() {
-        EmailVerification verification = EmailVerification.of("a@b.com", "123456", NOW, NOW.plusMinutes(5));
+        EmailVerification verification = newVerification();
 
         verification.markVerified(NOW.plusMinutes(1), NOW.plusMinutes(31));
 
@@ -41,7 +41,7 @@ class EmailVerificationTest {
 
     @Test
     void 재발송하면_인증_상태와_시도_횟수를_초기화한다() {
-        EmailVerification verification = EmailVerification.of("a@b.com", "123456", NOW, NOW.plusMinutes(5));
+        EmailVerification verification = newVerification();
         verification.matches("000000");
         verification.markVerified(NOW, NOW.plusMinutes(30));
 
@@ -52,5 +52,9 @@ class EmailVerificationTest {
         assertThat(verification.getAttemptCount()).isZero();
         assertThat(verification.isVerified()).isFalse();
         assertThat(verification.isExpired(NOW.plusMinutes(7))).isTrue();
+    }
+
+    private EmailVerification newVerification() {
+        return EmailVerification.of("a@b.com", VerificationPurpose.SIGNUP, "123456", NOW, NOW.plusMinutes(5));
     }
 }

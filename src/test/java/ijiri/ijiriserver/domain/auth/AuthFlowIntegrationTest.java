@@ -20,7 +20,10 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -162,6 +165,61 @@ class AuthFlowIntegrationTest {
         postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("MEMBER403"));
+    }
+
+    @Test
+    void 로그인에_5회_실패하면_맞는_비밀번호도_잠금으로_거부된다() throws Exception {
+        String email = newEmail();
+        signup(email);
+        String wrong = "{\"email\":\"%s\",\"password\":\"wrong1234\"}".formatted(email);
+        for (int i = 0; i < 5; i++) {
+            postJson("/auth/signin", wrong)
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(jsonPath("$.code").value("AUTH4013"));
+        }
+
+        postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"%s\"}".formatted(email, PASSWORD))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.code").value("AUTH4293"));
+    }
+
+    @Test
+    void 비밀번호를_재설정하면_기존_세션이_끊기고_새_비밀번호로_로그인한다() throws Exception {
+        String email = newEmail();
+        Tokens tokens = signup(email);
+
+        postJson(
+                "/auth/email/verification-code",
+                "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email)
+        ).andExpect(status().isOk());
+        ArgumentCaptor<String> code = ArgumentCaptor.forClass(String.class);
+        verify(verificationMailClient, times(2)).sendCode(eq(email), code.capture(), anyLong());
+        postJson(
+                "/auth/email/verification-code/verify",
+                "{\"email\":\"%s\",\"code\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}"
+                        .formatted(email, code.getValue())
+        ).andExpect(status().isOk());
+
+        postJson("/auth/password/reset", "{\"email\":\"%s\",\"newPassword\":\"newpass123\"}".formatted(email))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("AUTH2005"));
+
+        mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
+                .andExpect(status().isUnauthorized());
+        postJson("/auth/signin", "{\"email\":\"%s\",\"password\":\"newpass123\"}".formatted(email))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void 가입하지_않은_이메일로_재설정_코드를_요청해도_같은_응답을_주고_메일은_보내지_않는다() throws Exception {
+        String email = newEmail();
+
+        postJson(
+                "/auth/email/verification-code",
+                "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email)
+        ).andExpect(status().isOk());
+
+        verify(verificationMailClient, never()).sendCode(eq(email), anyString(), anyLong());
     }
 
     // 인증 코드 발송 -> 확인 -> 가입. 메일 발송은 목으로 대신하고 발송된 코드를 가로챈다

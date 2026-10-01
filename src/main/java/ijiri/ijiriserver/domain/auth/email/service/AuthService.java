@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.domain.auth.email.service;
 
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
+import ijiri.ijiriserver.domain.auth.email.dto.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 
@@ -13,4 +14,6 @@ public interface AuthService {
     AuthResponse signOut(Long memberId);
 
     AuthResponse signOutByRefreshToken(String refreshToken);
+
+    AuthResponse resetPassword(PasswordResetRequest request);
 }

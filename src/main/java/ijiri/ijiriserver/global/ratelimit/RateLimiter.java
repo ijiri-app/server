@@ -39,6 +39,16 @@ public class RateLimiter {
         return window.count() <= limit;
     }
 
+    // 횟수를 늘리지 않고 이미 한도에 도달했는지만 본다 (실패 횟수 기반 잠금 확인용)
+    public boolean isExhausted(String key, int limit) {
+        Window window = windows.get(key);
+        return window != null && !window.isExpired(clock.instant()) && window.count() >= limit;
+    }
+
+    public void reset(String key) {
+        windows.remove(key);
+    }
+
     @Scheduled(fixedRate = 600_000)
     public void purgeExpired() {
         Instant now = clock.instant();

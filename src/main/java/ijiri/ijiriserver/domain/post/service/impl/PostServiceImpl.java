@@ -109,6 +109,10 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional
     public void update(Long memberId, Long postId, PostUpdateRequest request) {
+        // 사진은 바꿀 수 없고 images 는 parts 의 태그를 싣는 용도라, parts 없이 오면 조용히 무시하지 않고 거절한다
+        if (request.parts() == null && request.images() != null) {
+            throw new CustomException(PostStatusCode.TAGS_WITHOUT_PARTS);
+        }
         Post post = getOwnPost(memberId, postId);
         if (request.buildStyle() != null) {
             post.changeBuildStyle(request.buildStyle());

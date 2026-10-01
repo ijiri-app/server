@@ -22,7 +22,7 @@ public record PostUpdateRequest(
         @Schema(description = "부품 전체 (유지할 부품은 postPartId 포함)")
         @Size(max = 30) List<@NotNull @Valid PostPartRequest> parts,
 
-        @Schema(description = "parts 와 함께 보낼 때: 사진별 태그")
+        @Schema(description = "사진별 태그. parts 와 함께만 보낼 수 있다 (없이 보내면 VALIDATION_FAILED)")
         @Size(max = 10) List<@NotNull @Valid PostImageRequest> images
 ) {
 }

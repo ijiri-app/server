@@ -170,6 +170,18 @@ class CommunityFlowIntegrationTest {
     }
 
     @Test
+    void 부품_없이_태그만_보내면_수정을_거절한다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "머플러");
+
+        mockMvc.perform(authorized(patch("/posts/" + postId), author)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"images\":[{\"imageKey\":\"posts/tmp/x.png\",\"tags\":[]}]}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
+    }
+
+    @Test
     void 로그인_상태에서_차종을_고르지_않으면_관심_차종_피드를_본다() throws Exception {
         String author = signup();
         long postId = createPost(author, "프론트립");

@@ -16,6 +16,7 @@ public enum PostStatusCode implements StatusCode {
             "부품 ref 가 겹치거나, 태그가 없는 부품 ref·이 게시물에 없는 사진을 가리킵니다."
     ),
     MISSING_IMAGE_SIZE(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "사진의 width, height 가 필요합니다."),
+    TAGS_WITHOUT_PARTS(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "태그(images)는 parts 와 함께 보내야 합니다."),
     NOT_POST_AUTHOR(HttpStatus.FORBIDDEN, "FORBIDDEN", "내 게시물만 수정·삭제할 수 있습니다."),
     POST_NOT_FOUND(HttpStatus.NOT_FOUND, "NOT_FOUND", "게시물을 찾을 수 없습니다.");
 

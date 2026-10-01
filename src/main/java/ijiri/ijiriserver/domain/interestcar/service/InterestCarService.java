@@ -6,5 +6,7 @@ import java.util.List;
 
 public interface InterestCarService {
 
+    InterestCarResponse getAll(Long memberId);
+
     InterestCarResponse replaceAll(Long memberId, List<Long> carModelIds);
 }

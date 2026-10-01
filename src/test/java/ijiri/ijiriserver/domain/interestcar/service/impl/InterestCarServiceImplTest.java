@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.interestcar.service.impl;
 
+import ijiri.ijiriserver.domain.carmodel.service.CarModelService;
 import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.repository.MemberInterestCarRepository;
 import ijiri.ijiriserver.domain.member.service.MemberService;
@@ -20,7 +21,12 @@ class InterestCarServiceImplTest {
 
     private final MemberInterestCarRepository repository = mock(MemberInterestCarRepository.class);
     private final MemberService memberService = mock(MemberService.class);
-    private final InterestCarServiceImpl service = new InterestCarServiceImpl(repository, memberService);
+    private final CarModelService carModelService = mock(CarModelService.class);
+    private final InterestCarServiceImpl service = new InterestCarServiceImpl(
+            repository,
+            memberService,
+            carModelService
+    );
 
     @Test
     void 중복_차종이_있으면_아무것도_지우지_않고_거부한다() {

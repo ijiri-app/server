@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.interestcar.service.impl;
 
+import ijiri.ijiriserver.domain.carmodel.service.CarModelService;
 import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.entity.MemberInterestCar;
 import ijiri.ijiriserver.domain.interestcar.exception.InterestCarStatusCode;
@@ -23,6 +24,13 @@ public class InterestCarServiceImpl implements InterestCarService {
 
     private final MemberInterestCarRepository memberInterestCarRepository;
     private final MemberService memberService;
+    private final CarModelService carModelService;
+
+    @Override
+    @Transactional(readOnly = true)
+    public InterestCarResponse getAll(Long memberId) {
+        return InterestCarResponse.from(memberInterestCarRepository.findAllByMemberIdOrderByDisplayOrderAsc(memberId));
+    }
 
     @Override
     @Transactional
@@ -32,6 +40,7 @@ public class InterestCarServiceImpl implements InterestCarService {
         if (new HashSet<>(carModelIds).size() != carModelIds.size()) {
             throw new CustomException(InterestCarStatusCode.DUPLICATE_CAR_MODEL);
         }
+        carModelService.validateCarModelsExist(carModelIds);
 
         memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
         List<MemberInterestCar> interestCars = IntStream.range(0, carModelIds.size())

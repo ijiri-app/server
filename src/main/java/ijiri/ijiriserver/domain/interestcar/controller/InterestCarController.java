@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +24,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class InterestCarController {
 
     private final InterestCarService interestCarService;
+
+    @Operation(
+            summary = "관심 차종 조회",
+            description = "화면에 보이는 순서대로 반환"
+    )
+    @GetMapping
+    public BaseResponse<InterestCarResponse> getAll(
+            @Parameter(hidden = true) @AuthenticationPrincipal String memberId
+    ) {
+        return BaseResponse.ok(interestCarService.getAll(Long.valueOf(memberId)));
+    }
 
     @Operation(
             summary = "관심 차종 저장",

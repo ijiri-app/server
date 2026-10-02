@@ -95,7 +95,7 @@ class MemberServiceImplTest {
                 new MemberRegisterCommand(Provider.GOOGLE, "google-1", null, "홍길동", null)
         );
 
-        assertThat(result.member().getNickname()).matches("이지리오너\\d{4}");
+        assertThat(result.member().getNickname()).matches("이지리오너\\d{6}");
     }
 
     private Member kakaoMember(LocalDateTime deletedAt) {

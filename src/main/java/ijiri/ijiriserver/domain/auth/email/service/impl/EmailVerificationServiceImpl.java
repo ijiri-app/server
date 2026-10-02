@@ -40,6 +40,10 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private static final String TOKEN_PREFIX = "vt_";
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String NOTICE_KEY_PREFIX = "verification:notice:";
+    // 코드당 5번 + 1분마다 재발송이면 IP 를 바꿔 가며 6자리 코드를 계속 맞혀 볼 수 있으므로 이메일별 하루 시도 수를 묶는다
+    private static final String ATTEMPT_KEY_PREFIX = "verification:attempt:";
+    private static final int MAX_ATTEMPTS_PER_DAY = 10;
+    private static final Duration ATTEMPT_LIMIT_PERIOD = Duration.ofDays(1);
 
     private final EmailVerificationRepository emailVerificationRepository;
     private final VerificationMailClient verificationMailClient;
@@ -127,6 +131,7 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     // 이 이메일로 발송된 코드가 없으면 다른 이메일의 코드를 넣은 경우도 포함해 일치하지 않는 것으로 본다.
     // 이미 확인했거나, 만료됐거나, 5번 틀린 코드는 무효
     private EmailVerification checkCode(String email, VerificationPurpose purpose, String code, LocalDateTime now) {
+        rateLimiter.check(ATTEMPT_KEY_PREFIX + purpose + ":" + email, MAX_ATTEMPTS_PER_DAY, ATTEMPT_LIMIT_PERIOD);
         EmailVerification verification = emailVerificationRepository.findByEmailAndPurpose(email, purpose)
                 .orElseThrow(() -> invalidCode(0));
         boolean usable = !verification.isVerified()

@@ -195,8 +195,10 @@ public class MemberServiceImpl implements MemberService, AdminVerifier {
     @Override
     @Transactional
     public void suspend(Long memberId, LocalDateTime until) {
-        getById(memberId).suspend(until);
-        eventPublisher.publishEvent(new MemberSuspendedEvent(memberId));
+        findActiveMember(memberId).ifPresent(member -> {
+            member.suspend(until);
+            eventPublisher.publishEvent(new MemberSuspendedEvent(memberId));
+        });
     }
 
     @Override
@@ -257,7 +259,8 @@ public class MemberServiceImpl implements MemberService, AdminVerifier {
     }
 
     private String randomNickname() {
-        return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
+        // 접두사 5자 + 6자리 = 11자 (닉네임 최대 12자). 4자리(9천 개)로는 회원이 늘면 금방 겹친다
+        return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(100_000, 1_000_000);
     }
 
     private String emptyToNull(String value) {

@@ -256,7 +256,7 @@ These are invariants. Do not change them without being asked, and keep this sect
   `getById` excludes withdrawn members (refresh is `INVALID_REFRESH_TOKEN`, not 404). `MemberPurgeScheduler`
   runs daily at 04:00, reads targets 100 at a time and hard-deletes one transaction per member, in listener
   order wishlist (`@Order(0)`) -> posts with parts/tags (1) -> uploads and files (2) -> owned cars (3) ->
-  others -> member row. Kakao unlink runs
+  others -> member row. The social unlink listener runs before all of them (`HIGHEST_PRECEDENCE`). Kakao unlink runs
   after the withdrawal commit and is retried before the purge if it fails; once the purge is 3 days overdue
   (`MemberPurgedEvent.finalAttempt`) the unlink failure is logged and the purge proceeds, so the 30-day
   deletion promise (Google Play policy) is kept.
@@ -276,7 +276,8 @@ These are invariants. Do not change them without being asked, and keep this sect
   15 min lock that email until the window ends (423 `ACCOUNT_LOCKED` with `retryAfterSeconds`); success or
   password reset clears the count. The lock duration is still an open question in the spec.
 - Rate limits (`RateLimiter`): sign-in 30 / 15 min per IP; sign-up and reset code sending 10 / h per IP;
-  upload URLs 100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
+  code checks (sign-up and reset) 10 / day per email and purpose, so 6-digit codes cannot be brute-forced
+  across IPs; upload URLs 100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
 - Password reset: `POST /auth/password/reset/code {email}` (204) -> `POST /auth/password/reset
   {email, code, newPassword}` (204). Same code rules as sign-up (purpose `RESET_PASSWORD`). For an email that
   is not an active email member the code API still answers 204 and sends nothing. The code check commits its
@@ -287,7 +288,8 @@ These are invariants. Do not change them without being asked, and keep this sect
   refresh.
 - Admin: `/admin/**` checks the member's current role in the DB on every request (`AdminVerifier`), not the
   token's `role` claim. Admins sign up normally and get `role = ADMIN` set in the DB. Report processing
-  records who (`resolved_by`), when and what.
+  records who (`resolved_by`), when and what. Hiding an already deleted post or suspending an already
+  withdrawn member is a no-op, so such reports can still be closed with that action.
 - Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`; with DB storage also
   GET `/images/**` and PUT `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
   detail also exclude posts of members in a block relation (either direction).
@@ -297,6 +299,9 @@ These are invariants. Do not change them without being asked, and keep this sect
   Content-Type (`image/jpeg` or `image/webp`) bound into the signature. When a post or profile uses the key,
   the server checks the stored object (HEAD: <= 10 MB, same Content-Type; first bytes: real JPEG/WebP),
   copies it to the permanent key without `tmp/` and deletes the temporary one (`INVALID_IMAGE` otherwise).
+  Storage side effects cannot roll back with the DB: the copy happens in the transaction, the temporary file
+  is deleted after commit, and on rollback the copy is deleted so the same upload key can be retried; every
+  other file deletion (post delete, profile change, purge) also runs after commit.
   Unattached uploads are deleted after 1 day (server rows + R2 lifecycle rule on `tmp/`). Purge deletes the
   member's files from storage. DB storage (local/test) signs its own URL with HMAC-SHA256.
 - Posts reference only the member's own owned car (`FORBIDDEN` otherwise); wishes reference `postPartId`,
@@ -304,7 +309,7 @@ These are invariants. Do not change them without being asked, and keep this sect
 - Passwords: 8-64 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
   Social sign-up never uses the provider's name (Google `name` is a real name); the nickname is always
-  generated as `이지리오너` + 4 digits (unique) and can be changed later.
+  generated as `이지리오너` + 6 digits (unique) and can be changed later.
 - Kakao API: only 400/401 mean an invalid provider token (`INVALID_PROVIDER_TOKEN`); other errors are
   `SOCIAL_SERVER_ERROR`. `APPLE` exists as a provider value but has no verifier yet (`UNSUPPORTED_PROVIDER`).
 - Secrets come from `.env` (never commit it). Never log passwords, tokens, or secrets.

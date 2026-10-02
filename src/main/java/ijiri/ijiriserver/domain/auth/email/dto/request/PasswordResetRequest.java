@@ -10,21 +10,21 @@ import jakarta.validation.constraints.Size;
 import java.util.Locale;
 
 /**
- * RESET_PASSWORD 용도로 인증 코드를 확인해 받은 verificationToken 이 있어야 재설정할 수 있다.
+ * POST /auth/password/reset/code 로 받은 코드로 바로 재설정한다.
  */
 public record PasswordResetRequest(
-        @Schema(description = "인증을 마친 이메일", example = "user@ijiri.com")
+        @Schema(description = "이메일", example = "user@ijiri.com")
         @NotBlank @Email String email,
 
-        @Schema(description = "새 비밀번호 (8~20자, 영문과 숫자 각 1개 이상)")
+        @Schema(description = "메일로 받은 숫자 6자리 코드", example = "123456")
+        @NotBlank @Pattern(regexp = "\\d{6}") String code,
+
+        @Schema(description = "새 비밀번호 (8~64자, 영문과 숫자 각 1개 이상)")
         @NotBlank
-        @Size(min = 8, max = 20)
+        @Size(min = 8, max = 64)
         @Pattern(regexp = SignupRequest.PASSWORD_REGEX, message = "영문과 숫자를 각각 1개 이상 포함해야 합니다.")
         @MaxUtf8Bytes(72)
-        String newPassword,
-
-        @Schema(description = "인증 코드 확인 응답의 verificationToken")
-        @NotBlank String verificationToken
+        String newPassword
 ) {
 
     public PasswordResetRequest {

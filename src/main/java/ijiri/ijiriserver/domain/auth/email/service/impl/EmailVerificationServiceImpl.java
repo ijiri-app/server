@@ -9,7 +9,6 @@ import ijiri.ijiriserver.domain.auth.email.repository.EmailVerificationRepositor
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.member.entity.Member;
-import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.domain.member.service.MemberService;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -32,7 +31,7 @@ import java.util.Optional;
 public class EmailVerificationServiceImpl implements EmailVerificationService {
 
     private static final long CODE_VALID_MINUTES = 5;
-    // 코드 확인 후 가입(재설정)까지 허용하는 시간 = verificationToken 유효 시간
+    // 가입 코드 확인 후 가입까지 허용하는 시간 = verificationToken 유효 시간
     private static final long TOKEN_VALID_MINUTES = 10;
     private static final long RESEND_COOLDOWN_SECONDS = 60;
     private static final int MAX_ATTEMPTS = 5;
@@ -49,25 +48,73 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
 
-    // 가입: 이미 가입된 이메일이면 EMAIL_ALREADY_EXISTS (화면에서 로그인으로 안내).
-    // 재설정: 가입 여부가 드러나지 않도록 활성 이메일 회원이 아니어도 같은 응답을 주고 메일만 보내지 않는다.
-    // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
+    // 가입된 이메일도 응답(성공/재발송 대기)은 미가입 이메일과 똑같이 두고 안내 메일만 보내 가입 여부가 드러나지 않게 한다
     @Override
-    public void sendCode(String email, VerificationPurpose purpose) {
+    public void sendSignupCode(String email) {
         Optional<Member> registered = memberService.findEmailMember(email);
-        if (purpose == VerificationPurpose.SIGNUP && registered.isPresent()) {
-            throw new CustomException(registered.get().isWithdrawn()
-                    ? MemberStatusCode.MEMBER_WITHDRAWN
-                    : MemberStatusCode.DUPLICATE_EMAIL);
-        }
-        if (purpose == VerificationPurpose.RESET_PASSWORD && registered.filter(m -> !m.isWithdrawn()).isEmpty()) {
-            acquireSilentCooldown(email, purpose);
+        if (registered.isPresent()) {
+            acquireNoticeCooldown(email, VerificationPurpose.SIGNUP);
+            if (registered.get().isWithdrawn()) {
+                verificationMailClient.sendWithdrawnAccount(email);
+            } else {
+                verificationMailClient.sendAlreadyRegistered(email);
+            }
             return;
         }
+        sendCode(email, VerificationPurpose.SIGNUP);
+    }
 
+    // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다
+    @Override
+    @Transactional(noRollbackFor = CustomException.class)
+    public AuthResponse verifySignupCode(String email, String code) {
+        LocalDateTime now = LocalDateTime.now(clock);
+        EmailVerification verification = checkCode(email, VerificationPurpose.SIGNUP, code, now);
+        String token = TOKEN_PREFIX + randomToken();
+        verification.markVerified(now, RefreshToken.hash(token), now.plusMinutes(TOKEN_VALID_MINUTES));
+        return AuthResponse.verified(token);
+    }
+
+    @Override
+    @Transactional
+    public void consumeSignupToken(String email, String verificationToken) {
+        int deleted = emailVerificationRepository.deleteVerified(
+                email,
+                VerificationPurpose.SIGNUP,
+                RefreshToken.hash(verificationToken),
+                LocalDateTime.now(clock)
+        );
+        if (deleted == 0) {
+            throw new CustomException(AuthStatusCode.INVALID_VERIFICATION_TOKEN);
+        }
+    }
+
+    // 가입 여부가 드러나지 않도록 활성 이메일 회원이 아니어도 같은 응답(재발송 대기 포함)을 주고 메일만 보내지 않는다
+    @Override
+    public void sendResetCode(String email) {
+        if (memberService.findEmailMember(email).filter(member -> !member.isWithdrawn()).isEmpty()) {
+            acquireNoticeCooldown(email, VerificationPurpose.RESET_PASSWORD);
+            return;
+        }
+        sendCode(email, VerificationPurpose.RESET_PASSWORD);
+    }
+
+    @Override
+    @Transactional(noRollbackFor = CustomException.class)
+    public void consumeResetCode(String email, String code) {
+        EmailVerification verification = checkCode(
+                email,
+                VerificationPurpose.RESET_PASSWORD,
+                code,
+                LocalDateTime.now(clock)
+        );
+        emailVerificationRepository.delete(verification);
+    }
+
+    // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
+    private void sendCode(String email, VerificationPurpose purpose) {
         String code = generateCode();
         EmailVerification saved = transactionTemplate.execute(status -> saveCode(email, purpose, code));
-
         // 발송에 실패하면 받지 못한 코드가 남아 재발송 대기에 걸리지 않도록 지운다
         try {
             verificationMailClient.sendCode(email, code, CODE_VALID_MINUTES);
@@ -77,16 +124,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         }
     }
 
-    // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다
-    @Override
-    @Transactional(noRollbackFor = CustomException.class)
-    public AuthResponse verifyCode(String email, String code, VerificationPurpose purpose) {
-        LocalDateTime now = LocalDateTime.now(clock);
-        // 이 이메일로 발송된 코드가 없으면 다른 이메일의 코드를 넣은 경우도 포함해 일치하지 않는 것으로 본다
-        EmailVerification verification = findForVerify(email, purpose)
+    // 이 이메일로 발송된 코드가 없으면 다른 이메일의 코드를 넣은 경우도 포함해 일치하지 않는 것으로 본다.
+    // 이미 확인했거나, 만료됐거나, 5번 틀린 코드는 무효
+    private EmailVerification checkCode(String email, VerificationPurpose purpose, String code, LocalDateTime now) {
+        EmailVerification verification = emailVerificationRepository.findByEmailAndPurpose(email, purpose)
                 .orElseThrow(() -> invalidCode(0));
-
-        // 이미 확인했거나, 만료됐거나, 5번 틀린 코드는 무효
         boolean usable = !verification.isVerified()
                 && !verification.isExpired(now)
                 && !verification.hasExceededAttempts(MAX_ATTEMPTS);
@@ -96,33 +138,11 @@ public class EmailVerificationServiceImpl implements EmailVerificationService {
         if (!verification.matches(code)) {
             throw invalidCode(verification.remainingAttempts(MAX_ATTEMPTS));
         }
-        String token = TOKEN_PREFIX + randomToken();
-        verification.markVerified(now, RefreshToken.hash(token), now.plusMinutes(TOKEN_VALID_MINUTES));
-        return AuthResponse.verified(token);
-    }
-
-    @Override
-    @Transactional
-    public void consumeVerified(String email, VerificationPurpose purpose, String verificationToken) {
-        int deleted = emailVerificationRepository.deleteVerified(
-                email,
-                purpose,
-                RefreshToken.hash(verificationToken),
-                LocalDateTime.now(clock)
-        );
-        if (deleted == 0) {
-            throw new CustomException(AuthStatusCode.INVALID_VERIFICATION_TOKEN);
-        }
-    }
-
-    private Optional<EmailVerification> findForVerify(String email, VerificationPurpose purpose) {
-        return purpose != null
-                ? emailVerificationRepository.findByEmailAndPurpose(email, purpose)
-                : emailVerificationRepository.findFirstByEmailOrderBySentAtDesc(email);
+        return verification;
     }
 
     // 코드를 발송하지 않는 경우에도 실제 발송과 같은 재발송 대기·같은 에러를 적용한다
-    private void acquireSilentCooldown(String email, VerificationPurpose purpose) {
+    private void acquireNoticeCooldown(String email, VerificationPurpose purpose) {
         String key = NOTICE_KEY_PREFIX + purpose + ":" + email;
         if (!rateLimiter.tryAcquire(key, 1, Duration.ofSeconds(RESEND_COOLDOWN_SECONDS))) {
             throw resendTooSoon(rateLimiter.retryAfterSeconds(key));

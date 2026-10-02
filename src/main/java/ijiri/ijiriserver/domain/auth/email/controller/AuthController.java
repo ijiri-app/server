@@ -5,7 +5,9 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.dto.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
+import ijiri.ijiriserver.domain.auth.email.dto.request.VerificationCodeSendRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
+import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
 import ijiri.ijiriserver.domain.auth.token.dto.request.RefreshTokenRequest;
 import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
@@ -40,8 +42,13 @@ public class AuthController {
     private static final String SIGNIN_KEY_PREFIX = "signin:ip:";
     private static final int SIGNIN_LIMIT_PER_IP = 30;
     private static final Duration SIGNIN_LIMIT_PERIOD = Duration.ofMinutes(15);
+    // 이메일 주소를 바꿔가며 메일을 대량 발송시키는 것을 막는 IP 단위 제한 (가입 코드 발송과 같은 기준)
+    private static final String SEND_KEY_PREFIX = "verification:ip:";
+    private static final int SEND_LIMIT_PER_IP = 10;
+    private static final Duration SEND_LIMIT_PERIOD = Duration.ofHours(1);
 
     private final AuthService authService;
+    private final EmailVerificationService emailVerificationService;
     private final JwtCookieManager jwtCookieManager;
     private final RateLimiter rateLimiter;
 
@@ -78,8 +85,24 @@ public class AuthController {
     }
 
     @Operation(
+            summary = "비밀번호 재설정 코드 발송",
+            description = "숫자 6자리, 5분 유효, 같은 이메일 1분에 1번. 가입 여부와 무관하게 204 를 주고, "
+                    + "활성 이메일 회원에게만 메일을 보낸다"
+    )
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @PostMapping("/password/reset/code")
+    public void sendResetCode(
+            @Valid @RequestBody VerificationCodeSendRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
+        emailVerificationService.sendResetCode(request.email());
+    }
+
+    @Operation(
             summary = "비밀번호 재설정",
-            description = "RESET_PASSWORD 용도로 받은 verificationToken 으로 비밀번호를 바꾸고 모든 세션을 끊는다. 204"
+            description = "메일로 받은 코드와 새 비밀번호. 코드가 틀리면 INVALID_VERIFICATION_CODE + remainingAttempts. "
+                    + "바꾸면 모든 세션을 끊는다. 204"
     )
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/password/reset")

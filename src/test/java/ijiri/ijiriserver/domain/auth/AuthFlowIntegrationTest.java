@@ -54,7 +54,7 @@ class AuthFlowIntegrationTest {
     @Test
     void 가입하면_로그인_응답을_받고_내_정보를_조회할_수_있다() throws Exception {
         String email = newEmail();
-        String token = verificationToken(email, "SIGNUP", 1);
+        String token = verificationToken(email, 1);
 
         String json = postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
                 .andExpect(status().isOk())
@@ -76,13 +76,15 @@ class AuthFlowIntegrationTest {
     }
 
     @Test
-    void 이미_가입된_이메일로_가입_코드를_요청하면_EMAIL_ALREADY_EXISTS() throws Exception {
+    void 이미_가입된_이메일로_가입_코드를_요청해도_같은_응답을_주고_안내_메일만_보낸다() throws Exception {
         String email = newEmail();
         signup(email);
 
-        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"SIGNUP\"}".formatted(email))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("EMAIL_ALREADY_EXISTS"));
+        postJson("/auth/email/send-code", "{\"email\":\"%s\"}".formatted(email))
+                .andExpect(status().isNoContent());
+
+        verify(verificationMailClient).sendAlreadyRegistered(email);
+        verify(verificationMailClient, times(1)).sendCode(eq(email), anyString(), anyLong());
     }
 
     @Test
@@ -101,11 +103,11 @@ class AuthFlowIntegrationTest {
     void 같은_닉네임으로는_가입할_수_없다() throws Exception {
         String nickname = uniqueNickname();
         String first = newEmail();
-        postJson("/auth/signup", signupBody(first, nickname, verificationToken(first, "SIGNUP", 1)))
+        postJson("/auth/signup", signupBody(first, nickname, verificationToken(first, 1)))
                 .andExpect(status().isOk());
         String second = newEmail();
 
-        postJson("/auth/signup", signupBody(second, nickname, verificationToken(second, "SIGNUP", 1)))
+        postJson("/auth/signup", signupBody(second, nickname, verificationToken(second, 1)))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("NICKNAME_ALREADY_EXISTS"));
     }
@@ -116,7 +118,7 @@ class AuthFlowIntegrationTest {
         String body = """
                 {"email":"%s","password":"%s","nickname":"%s","verificationToken":"%s",
                  "agreements":{"age14":true,"terms":true,"privacy":false}}
-                """.formatted(email, PASSWORD, uniqueNickname(), verificationToken(email, "SIGNUP", 1));
+                """.formatted(email, PASSWORD, uniqueNickname(), verificationToken(email, 1));
 
         postJson("/auth/signup", body)
                 .andExpect(status().isBadRequest())
@@ -127,7 +129,7 @@ class AuthFlowIntegrationTest {
     @Test
     void verificationToken_은_한_번만_쓸_수_있다() throws Exception {
         String email = newEmail();
-        String token = verificationToken(email, "SIGNUP", 1);
+        String token = verificationToken(email, 1);
         postJson("/auth/signup", signupBody(email, uniqueNickname(), token)).andExpect(status().isOk());
 
         postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
@@ -255,12 +257,13 @@ class AuthFlowIntegrationTest {
     void 비밀번호를_재설정하면_기존_세션이_끊기고_새_비밀번호로_로그인한다() throws Exception {
         String email = newEmail();
         Tokens tokens = signup(email);
-        String token = verificationToken(email, "RESET_PASSWORD", 2);
+        postJson("/auth/password/reset/code", "{\"email\":\"%s\"}".formatted(email))
+                .andExpect(status().isNoContent());
 
         postJson(
                 "/auth/password/reset",
-                "{\"email\":\"%s\",\"newPassword\":\"newpass123\",\"verificationToken\":\"%s\"}"
-                        .formatted(email, token)
+                "{\"email\":\"%s\",\"code\":\"%s\",\"newPassword\":\"newpass123\"}"
+                        .formatted(email, sentCode(email, 2))
         ).andExpect(status().isNoContent());
 
         mockMvc.perform(get("/members/me").header(HttpHeaders.AUTHORIZATION, bearer(tokens.accessToken())))
@@ -273,7 +276,7 @@ class AuthFlowIntegrationTest {
     void 가입하지_않은_이메일로_재설정_코드를_요청해도_204_를_주고_메일은_보내지_않는다() throws Exception {
         String email = newEmail();
 
-        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"RESET_PASSWORD\"}".formatted(email))
+        postJson("/auth/password/reset/code", "{\"email\":\"%s\"}".formatted(email))
                 .andExpect(status().isNoContent());
 
         verify(verificationMailClient, never()).sendCode(eq(email), anyString(), anyLong());
@@ -281,14 +284,14 @@ class AuthFlowIntegrationTest {
 
     // 인증 코드 발송 -> 확인 -> 가입. 메일 발송은 목으로 대신하고 발송된 코드를 가로챈다
     private Tokens signup(String email) throws Exception {
-        String token = verificationToken(email, "SIGNUP", 1);
+        String token = verificationToken(email, 1);
         return tokens(postJson("/auth/signup", signupBody(email, uniqueNickname(), token))
                 .andExpect(status().isOk()));
     }
 
     // sentCount: 이 이메일로 지금까지 발송된 코드 수 (마지막 코드를 쓴다)
-    private String verificationToken(String email, String purpose, int sentCount) throws Exception {
-        postJson("/auth/email/send-code", "{\"email\":\"%s\",\"purpose\":\"%s\"}".formatted(email, purpose))
+    private String verificationToken(String email, int sentCount) throws Exception {
+        postJson("/auth/email/send-code", "{\"email\":\"%s\"}".formatted(email))
                 .andExpect(status().isNoContent());
         String json = postJson(
                 "/auth/email/verify-code",

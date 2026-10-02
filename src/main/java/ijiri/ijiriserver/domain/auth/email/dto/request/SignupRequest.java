@@ -20,9 +20,9 @@ public record SignupRequest(
         @NotBlank @Email String email,
 
         // BCrypt 는 72바이트까지만 처리하므로 글자 수와 별도로 바이트 길이도 제한한다 (한글은 1자 3바이트)
-        @Schema(description = "비밀번호 (8~20자, 영문과 숫자 각 1개 이상)")
+        @Schema(description = "비밀번호 (8~64자, 영문과 숫자 각 1개 이상)")
         @NotBlank
-        @Size(min = 8, max = 20)
+        @Size(min = 8, max = 64)
         @Pattern(regexp = PASSWORD_REGEX, message = "영문과 숫자를 각각 1개 이상 포함해야 합니다.")
         @MaxUtf8Bytes(72)
         String password,

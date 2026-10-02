@@ -1,23 +1,21 @@
 package ijiri.ijiriserver.domain.auth.email.dto.request;
 
-import ijiri.ijiriserver.domain.auth.email.entity.VerificationPurpose;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.Locale;
 
+/**
+ * 가입용 인증 코드 발송과 비밀번호 재설정 코드 발송에 함께 쓴다.
+ */
 public record VerificationCodeSendRequest(
-        @Schema(description = "인증할 이메일", example = "user@ijiri.com")
-        @NotBlank @Email String email,
-
-        @Schema(description = "용도. 비우면 SIGNUP", example = "SIGNUP")
-        VerificationPurpose purpose
+        @Schema(description = "이메일", example = "user@ijiri.com")
+        @NotBlank @Email String email
 ) {
 
     // 대소문자/공백만 다른 이메일로 중복 가입되지 않도록 소문자로 통일
     public VerificationCodeSendRequest {
         email = email == null ? null : email.trim().toLowerCase(Locale.ROOT);
-        purpose = purpose == null ? VerificationPurpose.SIGNUP : purpose;
     }
 }

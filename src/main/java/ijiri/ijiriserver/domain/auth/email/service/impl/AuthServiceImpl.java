@@ -5,7 +5,6 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.dto.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
-import ijiri.ijiriserver.domain.auth.email.entity.VerificationPurpose;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
 import ijiri.ijiriserver.domain.auth.email.service.EmailVerificationService;
 import ijiri.ijiriserver.domain.auth.token.service.TokenService;
@@ -20,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.util.Map;
@@ -41,17 +41,14 @@ public class AuthServiceImpl implements AuthService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
+    private final TransactionTemplate transactionTemplate;
 
     // 인증 기록 소모, 회원 생성, 토큰 발급을 한 트랜잭션으로 묶어 중간에 실패하면 인증을 다시 쓸 수 있게 한다.
     // 가입 직후 바로 서비스를 쓰도록 로그인 응답과 같은 형태로 돌려준다
     @Override
     @Transactional
     public AuthResponse signup(SignupRequest request) {
-        emailVerificationService.consumeVerified(
-                request.email(),
-                VerificationPurpose.SIGNUP,
-                request.verificationToken()
-        );
+        emailVerificationService.consumeSignupToken(request.email(), request.verificationToken());
         Member member = memberService.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),
@@ -99,18 +96,15 @@ public class AuthServiceImpl implements AuthService {
         tokenService.signOutByRefreshToken(refreshToken);
     }
 
-    // 인증 기록 소모, 비밀번호 변경, 세션 폐기를 한 트랜잭션으로 묶는다.
+    // 코드 확인은 틀린 시도 횟수가 남도록 자기 트랜잭션에서 하고, 맞으면 비밀번호 변경과 세션 폐기를 한 트랜잭션으로 묶는다.
     // 비밀번호를 잊어 잠긴 계정도 재설정 후 바로 로그인할 수 있도록 실패 횟수를 지운다
     @Override
-    @Transactional
     public void resetPassword(PasswordResetRequest request) {
-        emailVerificationService.consumeVerified(
-                request.email(),
-                VerificationPurpose.RESET_PASSWORD,
-                request.verificationToken()
-        );
-        Long memberId = memberService.changePassword(request.email(), passwordEncoder.encode(request.newPassword()));
-        tokenService.signOut(memberId);
+        emailVerificationService.consumeResetCode(request.email(), request.code());
+        String encoded = passwordEncoder.encode(request.newPassword());
+        transactionTemplate.executeWithoutResult(status -> tokenService.signOut(
+                memberService.changePassword(request.email(), encoded)
+        ));
         rateLimiter.reset(SIGNIN_FAILURE_KEY_PREFIX + request.email());
     }
 }

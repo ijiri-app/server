@@ -39,9 +39,8 @@ public class EmailVerificationController {
 
     @Operation(
             summary = "인증 코드 발송",
-            description = "숫자 6자리, 5분 유효. 같은 이메일 1분에 1번, IP 당 시간당 10회(TOO_MANY_REQUESTS). 204. "
-                    + "SIGNUP 인데 이미 가입된 이메일이면 EMAIL_ALREADY_EXISTS. "
-                    + "RESET_PASSWORD 는 가입되지 않은 이메일이어도 204 를 주고 메일만 보내지 않는다"
+            description = "가입용. 숫자 6자리, 5분 유효. 같은 이메일 1분에 1번, IP 당 시간당 10회(TOO_MANY_REQUESTS). 204. "
+                    + "이미 가입된 이메일이어도 같은 응답을 주고 코드 대신 안내 메일을 보낸다"
     )
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/send-code")
@@ -50,19 +49,19 @@ public class EmailVerificationController {
             HttpServletRequest httpRequest
     ) {
         rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
-        emailVerificationService.sendCode(request.email(), request.purpose());
+        emailVerificationService.sendSignupCode(request.email());
     }
 
     @Operation(
             summary = "인증 코드 확인",
-            description = "맞으면 verificationToken(10분, 1회용)을 준다. 틀리면 INVALID_VERIFICATION_CODE + "
+            description = "가입용. 맞으면 verificationToken(10분, 1회용)을 준다. 틀리면 INVALID_VERIFICATION_CODE + "
                     + "remainingAttempts. 5번 틀리면 코드 무효"
     )
     @PostMapping("/verify-code")
     public BaseResponse<AuthResponse> verifyCode(@Valid @RequestBody VerificationCodeConfirmRequest request) {
         return BaseResponse.of(
                 AuthStatusCode.EMAIL_VERIFIED,
-                emailVerificationService.verifyCode(request.email(), request.code(), request.purpose())
+                emailVerificationService.verifySignupCode(request.email(), request.code())
         );
     }
 }

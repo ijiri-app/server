@@ -6,6 +6,9 @@ import ijiri.ijiriserver.domain.upload.repository.ImageFileRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -32,17 +35,22 @@ public class DbImageStorageClient implements ImageStorageClient {
     private static final String SIGNING_CONTEXT = "image-upload:";
 
     private final ImageFileRepository imageFileRepository;
+    // 삭제는 업로드 서비스가 커밋·롤백 뒤에 부르므로, 끝난 트랜잭션에 섞이지 않게 새 트랜잭션에서 한다
+    private final TransactionTemplate newTransaction;
     private final String serverUrl;
     private final byte[] signingKey;
     private final Clock clock;
 
     public DbImageStorageClient(
             ImageFileRepository imageFileRepository,
+            PlatformTransactionManager transactionManager,
             @Value("${storage.db.server-url}") String serverUrl,
             @Value("${jwt.secret}") String secret,
             Clock clock
     ) {
         this.imageFileRepository = imageFileRepository;
+        this.newTransaction = new TransactionTemplate(transactionManager);
+        this.newTransaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
         this.serverUrl = serverUrl;
         this.signingKey = (SIGNING_CONTEXT + secret).getBytes(StandardCharsets.UTF_8);
         this.clock = clock;
@@ -77,7 +85,7 @@ public class DbImageStorageClient implements ImageStorageClient {
 
     @Override
     public void delete(String imageKey) {
-        imageFileRepository.deleteByImageKey(imageKey);
+        newTransaction.executeWithoutResult(status -> imageFileRepository.deleteByImageKey(imageKey));
     }
 
     public boolean isValidSignature(String imageKey, String contentType, long expires, String signature) {

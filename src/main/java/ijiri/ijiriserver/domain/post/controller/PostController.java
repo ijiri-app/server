@@ -92,8 +92,10 @@ public class PostController {
 
     @Operation(
             summary = "회원의 게시물 목록",
-            description = "피드와 같은 카드, 최신순. 본인 목록에는 숨김 처리된 게시물도 hidden = true 로 포함"
+            description = "피드와 같은 카드, 최신순. 로그인 없이도 볼 수 있다. "
+                    + "본인 목록에는 숨김 처리된 게시물도 hidden = true 로 포함"
     )
+    @SecurityRequirements
     @GetMapping("/members/{memberId}/posts")
     public BaseResponse<PostResponse> getMemberPosts(
             @Parameter(hidden = true) @AuthenticationPrincipal String viewerId,
@@ -101,7 +103,7 @@ public class PostController {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(postService.getMemberPosts(Long.valueOf(viewerId), memberId, cursor, size));
+        return BaseResponse.ok(postService.getMemberPosts(toMemberId(viewerId), memberId, cursor, size));
     }
 
     // 공개 API 라 비로그인이면 principal 이 null 이다

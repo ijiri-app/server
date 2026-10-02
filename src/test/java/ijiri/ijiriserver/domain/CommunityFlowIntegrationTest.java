@@ -182,6 +182,73 @@ class CommunityFlowIntegrationTest {
     }
 
     @Test
+    void 게시물_작성이_검증에서_실패해도_같은_사진으로_다시_올릴_수_있다() throws Exception {
+        String token = signup();
+        long carId = registerCar(token);
+        String imageKey = upload(token);
+        String badParts = "[{\"ref\":\"p1\",\"category\":\"CHASSIS\",\"partName\":\"휠\"},"
+                + "{\"ref\":\"p1\",\"category\":\"CHASSIS\",\"partName\":\"타이어\"}]";
+
+        createPostRequest(token, carId, imageKey, badParts)
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PART_REF"));
+
+        createPostRequest(token, carId, imageKey, "[]").andExpect(status().isCreated());
+        mockMvc.perform(get("/images/" + imageKey.substring("tmp/".length()))).andExpect(status().isOk());
+    }
+
+    @Test
+    void 회원의_게시물_목록은_로그인_없이_볼_수_있다() throws Exception {
+        String token = signup();
+        long postId = createPost(token, "흡기 필터");
+
+        mockMvc.perform(get("/members/" + myId(token) + "/posts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.result.items[0].postId").value((int) postId));
+    }
+
+    @Test
+    void 같은_postPartId_를_두_번_보내면_수정을_거절한다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "서스펜션");
+        String detail = mockMvc.perform(get("/posts/" + postId)).andReturn().getResponse().getContentAsString();
+        int postPartId = JsonPath.read(detail, "$.result.parts[0].postPartId");
+
+        mockMvc.perform(authorized(patch("/posts/" + postId), author)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"parts":[{"ref":"a","category":"CHASSIS","postPartId":%d},
+                                          {"ref":"b","category":"CHASSIS","postPartId":%d}]}
+                                """.formatted(postPartId, postPartId)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_PART_REF"));
+    }
+
+    @Test
+    void 삭제된_게시물에_대한_신고도_숨김_처리로_닫을_수_있다() throws Exception {
+        String author = signup();
+        long postId = createPost(author, "디퓨저");
+        String reporter = signup();
+        mockMvc.perform(authorized(post("/reports"), reporter)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"targetType\":\"POST\",\"targetId\":%d,\"reason\":\"SPAM\"}".formatted(postId)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(authorized(delete("/posts/" + postId), author)).andExpect(status().isNoContent());
+        String admin = signup();
+        jdbcTemplate.update("UPDATE member SET role = 'ADMIN' WHERE id = ?", myId(admin));
+        Long reportId = jdbcTemplate.queryForObject(
+                "SELECT id FROM report WHERE target_type = 'POST' AND target_id = ?",
+                Long.class,
+                postId
+        );
+
+        mockMvc.perform(authorized(patch("/admin/reports/" + reportId), admin)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"action\":\"HIDE_POST\"}"))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
     void 로그인_상태에서_차종을_고르지_않으면_관심_차종_피드를_본다() throws Exception {
         String author = signup();
         long postId = createPost(author, "프론트립");

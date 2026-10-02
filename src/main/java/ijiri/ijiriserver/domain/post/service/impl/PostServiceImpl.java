@@ -225,9 +225,7 @@ public class PostServiceImpl implements PostService {
     @Override
     @Transactional
     public void hide(Long postId) {
-        postRepository.findById(postId)
-                .orElseThrow(() -> new CustomException(PostStatusCode.POST_NOT_FOUND))
-                .hide();
+        postRepository.findById(postId).ifPresent(Post::hide);
     }
 
     @Override
@@ -282,6 +280,9 @@ public class PostServiceImpl implements PostService {
                 .toList();
         eventPublisher.publishEvent(new PostDeletedEvent(post.getId()));
         partService.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), -1);
+        // 태그는 사진을 FK 로 가리키는데 Hibernate 의 삭제 순서는 보장되지 않으므로, 부품·태그를 먼저 지운다
+        post.replaceParts(List.of());
+        postRepository.flush();
         postRepository.delete(post);
         uploadService.delete(imageKeys);
     }
@@ -299,7 +300,7 @@ public class PostServiceImpl implements PostService {
                 .mapToObj(order -> {
                     PostPartRequest request = partRequests.get(order);
                     PostPart part = request.postPartId() != null && existing.containsKey(request.postPartId())
-                            ? existing.get(request.postPartId())
+                            ? keepExisting(existing.get(request.postPartId()), request, byRef.values())
                             : PostPart.of(post, resolvePart(request).id(), request.category(), order);
                     part.reorder(request.category(), order);
                     part.clearTags();
@@ -321,6 +322,16 @@ public class PostServiceImpl implements PostService {
             }
         }
         return parts;
+    }
+
+    // 유지하는 부품(postPartId)은 담기 기록이 가리키는 대상이라 다른 부품으로 바꿀 수 없다.
+    // 바꾸려면 postPartId 없이 새 부품으로 보내고, 같은 postPartId 를 두 번 보내면 거절한다
+    private PostPart keepExisting(PostPart part, PostPartRequest request, Collection<PostPart> alreadyUsed) {
+        boolean changesPart = request.partId() != null && !request.partId().equals(part.getPartId());
+        if (changesPart || alreadyUsed.contains(part)) {
+            throw new CustomException(PostStatusCode.INVALID_PART_REF);
+        }
+        return part;
     }
 
     private PartInfo resolvePart(PostPartRequest request) {

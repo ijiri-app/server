@@ -17,10 +17,13 @@ import ijiri.ijiriserver.global.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import ijiri.ijiriserver.global.storage.ImageUrlResolver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
@@ -36,6 +39,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UploadServiceImpl implements UploadService {
@@ -87,7 +91,9 @@ public class UploadServiceImpl implements UploadService {
     }
 
     // 서버는 파일을 거치지 않으므로 연결할 때 저장소에서 크기·형식(HEAD)과 파일 앞부분(시그니처)을 확인한 뒤
-    // 임시 키(tmp/)에서 영구 키로 옮긴다. 임시 키는 수명 주기 규칙으로 지워지므로 옮기지 않으면 사라진다
+    // 임시 키(tmp/)에서 영구 키로 옮긴다. 임시 키는 수명 주기 규칙으로 지워지므로 옮기지 않으면 사라진다.
+    // 저장소 작업은 DB 롤백으로 되돌릴 수 없으므로, 복사는 지금 하되 임시 파일 삭제는 커밋 뒤에,
+    // 롤백되면 복사본을 지워 같은 업로드 키로 다시 시도할 수 있게 한다
     @Override
     @Transactional
     public List<AttachedImage> attach(Long memberId, List<String> imageKeys, UploadPurpose purpose) {
@@ -169,14 +175,42 @@ public class UploadServiceImpl implements UploadService {
         String uploadKey = image.getImageKey();
         String permanentKey = imageUrlResolver.permanentKeyOf(uploadKey);
         imageStorageClient.copy(uploadKey, permanentKey);
-        imageStorageClient.delete(uploadKey);
+        afterCommit(() -> imageStorageClient.delete(uploadKey));
+        afterRollback(() -> imageStorageClient.delete(permanentKey));
         image.attach(permanentKey);
         return new AttachedImage(permanentKey, imageUrlResolver.urlOf(permanentKey));
     }
 
+    // 파일은 커밋 뒤에 지운다. 롤백되면 DB 가 계속 가리키는 파일이 남아 있어야 하기 때문
     private void deleteAll(List<UploadedImage> images) {
         uploadedImageRepository.deleteAll(images);
-        images.forEach(image -> imageStorageClient.delete(image.getImageKey()));
+        List<String> keys = images.stream().map(UploadedImage::getImageKey).toList();
+        afterCommit(() -> keys.forEach(imageStorageClient::delete));
+    }
+
+    // 실패해도 이미 커밋된 결과는 바꿀 수 없으므로 로그만 남긴다 (남은 파일은 저장소에 고아로 남는다)
+    private void afterCommit(Runnable action) {
+        runOnCompletion(action, TransactionSynchronization.STATUS_COMMITTED);
+    }
+
+    private void afterRollback(Runnable action) {
+        runOnCompletion(action, TransactionSynchronization.STATUS_ROLLED_BACK);
+    }
+
+    private void runOnCompletion(Runnable action, int expectedStatus) {
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status != expectedStatus) {
+                    return;
+                }
+                try {
+                    action.run();
+                } catch (RuntimeException e) {
+                    log.error("Storage cleanup after transaction failed", e);
+                }
+            }
+        });
     }
 
     private boolean matchesSignature(String contentType, byte[] head) {

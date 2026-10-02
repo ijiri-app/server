@@ -13,7 +13,7 @@ public enum PostStatusCode implements StatusCode {
     INVALID_PART_REF(
             HttpStatus.BAD_REQUEST,
             "INVALID_PART_REF",
-            "부품 ref 가 겹치거나, 태그가 없는 부품 ref·이 게시물에 없는 사진을 가리킵니다."
+            "부품 ref·postPartId 가 겹치거나, 유지하는 부품을 다른 부품으로 바꾸거나, 없는 ref·사진을 가리킵니다."
     ),
     MISSING_IMAGE_SIZE(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "사진의 width, height 가 필요합니다."),
     TAGS_WITHOUT_PARTS(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "태그(images)는 parts 와 함께 보내야 합니다."),

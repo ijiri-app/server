@@ -39,7 +39,7 @@ public class InterestCarController {
 
     @Operation(
             summary = "관심 차종 저장",
-            description = "전체 교체(1~10개, 배열 순서 = 피드 탭 순서). 신규 가입 직후 기기에 저장해 둔 목록을 올리거나 "
+            description = "전체 교체(0~30개, 배열 순서 = 피드 탭 순서). 신규 가입 직후 기기에 저장해 둔 목록을 올리거나 "
                     + "편집 화면에서 사용. 204"
     )
     @ResponseStatus(HttpStatus.NO_CONTENT)

@@ -8,7 +8,10 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public record InterestCarUpdateRequest(
-        @Schema(description = "관심 차종 ID 목록 (1~10개). 순서 = 피드 탭 순서", example = "[3, 11, 15]")
-        @NotNull @Size(min = 1, max = 10) List<@NotNull @Positive Long> carModelIds
+        @Schema(
+                description = "관심 차종 ID 목록 (최대 30개). 순서 = 피드 탭 순서, 빈 배열이면 전체 삭제",
+                example = "[3, 11, 15]"
+        )
+        @NotNull @Size(max = 30) List<@NotNull @Positive Long> carModelIds
 ) {
 }

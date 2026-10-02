@@ -71,7 +71,8 @@ public class SecurityConfig {
                                 "/car-models",
                                 "/car-models/*",
                                 "/feed",
-                                "/posts/*"
+                                "/posts/*",
+                                "/members/*/posts"
                         ).permitAll()
                         // 업로드 URL 의 서명(만료 시각 포함)으로 인증한다. presigned URL 과 같은 방식
                         .requestMatchers(HttpMethod.PUT, "/uploads/files/**").permitAll()

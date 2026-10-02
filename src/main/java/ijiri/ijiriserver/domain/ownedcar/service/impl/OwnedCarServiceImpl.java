@@ -59,7 +59,8 @@ public class OwnedCarServiceImpl implements OwnedCarService {
     @Transactional
     public OwnedCarResponse create(Long memberId, OwnedCarCreateRequest request) {
         memberService.getById(memberId);
-        if (ownedCarRepository.countByMemberId(memberId) >= MAX_OWNED_CARS) {
+        // 게시물이 있어 지우지 못하고 이전 차량(PAST)으로 남은 차는 세지 않는다
+        if (ownedCarRepository.countByMemberIdAndStatus(memberId, OwnedCarStatus.OWNED) >= MAX_OWNED_CARS) {
             throw new CustomException(OwnedCarStatusCode.OWNED_CAR_LIMIT_EXCEEDED);
         }
         CarSpec spec = carModelService.getSpecByTrim(request.trimId());

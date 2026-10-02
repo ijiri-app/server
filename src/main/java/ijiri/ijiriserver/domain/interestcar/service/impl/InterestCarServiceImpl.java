@@ -40,7 +40,12 @@ public class InterestCarServiceImpl implements InterestCarService {
         if (new HashSet<>(carModelIds).size() != carModelIds.size()) {
             throw new CustomException(InterestCarStatusCode.DUPLICATE_CAR_MODEL);
         }
-        carModelService.validateCarModelsExist(carModelIds);
+        // 관리자가 숨긴 차종이라도 이미 고른 것은 남겨 둘 수 있게, 새로 추가하는 차종만 확인한다
+        List<Long> current = getCarModelIds(memberId);
+        carModelService.validateCarModelsExist(carModelIds.stream()
+                .filter(carModelId -> !current.contains(carModelId))
+                .toList()
+        );
 
         memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
         memberInterestCarRepository.saveAll(IntStream.range(0, carModelIds.size())

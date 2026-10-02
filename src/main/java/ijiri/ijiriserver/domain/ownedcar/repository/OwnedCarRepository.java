@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.domain.ownedcar.repository;
 
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,7 +16,7 @@ public interface OwnedCarRepository extends JpaRepository<OwnedCar, Long> {
 
     Optional<OwnedCar> findByIdAndMemberId(Long id, Long memberId);
 
-    long countByMemberId(Long memberId);
+    long countByMemberIdAndStatus(Long memberId, OwnedCarStatus status);
 
     @Modifying
     @Query("DELETE FROM OwnedCar c WHERE c.memberId = :memberId")

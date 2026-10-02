@@ -12,8 +12,6 @@ public interface ImageFileRepository extends JpaRepository<ImageFile, Long> {
 
     Optional<ImageFile> findByImageKey(String imageKey);
 
-    boolean existsByImageKey(String imageKey);
-
     @Modifying
     @Query("DELETE FROM ImageFile f WHERE f.imageKey = :imageKey")
     void deleteByImageKey(@Param("imageKey") String imageKey);

@@ -12,8 +12,8 @@ public record UploadUrlRequest(
         @Schema(description = "올릴 사진 수 (1~10)", example = "3")
         @NotNull @Min(1) @Max(10) Integer count,
 
-        @Schema(description = "image/jpeg, image/png, image/webp, image/heic 중 하나", example = "image/jpeg")
-        @NotBlank @Pattern(regexp = "image/(jpeg|png|webp|heic)") String contentType,
+        @Schema(description = "image/jpeg 또는 image/webp (앱이 변환해서 올린다)", example = "image/jpeg")
+        @NotBlank @Pattern(regexp = "image/(jpeg|webp)") String contentType,
 
         @Schema(description = "POST(게시물, 기본) / PROFILE(프로필 사진)", example = "POST")
         UploadPurpose purpose

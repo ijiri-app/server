@@ -1,12 +1,13 @@
 package ijiri.ijiriserver.domain.upload.controller;
 
-import ijiri.ijiriserver.domain.upload.dto.StoredImage;
-import ijiri.ijiriserver.domain.upload.service.UploadService;
+import ijiri.ijiriserver.domain.upload.dto.ImageFileContent;
+import ijiri.ijiriserver.domain.upload.service.DbImageFileService;
 import ijiri.ijiriserver.global.exception.CommonStatusCode;
 import ijiri.ijiriserver.global.exception.CustomException;
 import io.swagger.v3.oas.annotations.Hidden;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.InvalidMediaTypeException;
@@ -24,19 +25,20 @@ import java.io.InputStream;
 import java.time.Duration;
 
 /**
- * DB 저장소 전용: presigned URL 처럼 쓰는 파일 업로드(PUT)와 사진 조회(GET).
- * 저장소 자체를 흉내 내는 엔드포인트라 BaseResponse 로 감싸지 않는다. S3 등으로 옮기면 지운다.
+ * DB 저장소(로컬·테스트) 전용: R2 를 대신해 presigned URL 업로드(PUT)와 공개 URL 조회(GET)를 받는다.
+ * 저장소 자체를 흉내 내는 엔드포인트라 BaseResponse 로 감싸지 않는다. 운영(storage.type = r2)에서는 등록되지 않는다.
  */
 @Hidden
 @RestController
 @RequiredArgsConstructor
+@ConditionalOnProperty(name = "storage.type", havingValue = "db", matchIfMissing = true)
 public class ImageFileController {
 
     private static final int MAX_FILE_BYTES = 10 * 1024 * 1024;
     // 키는 한 번 정해지면 내용이 바뀌지 않으므로 오래 캐시한다
     private static final CacheControl IMAGE_CACHE = CacheControl.maxAge(Duration.ofDays(365)).cachePublic();
 
-    private final UploadService uploadService;
+    private final DbImageFileService dbImageFileService;
 
     @PutMapping("/uploads/files/{*imageKey}")
     public ResponseEntity<Void> upload(
@@ -46,7 +48,7 @@ public class ImageFileController {
             @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType,
             HttpServletRequest httpRequest
     ) {
-        uploadService.receiveFile(
+        dbImageFileService.receive(
                 stripLeadingSlash(imageKey),
                 expires,
                 signature,
@@ -58,7 +60,7 @@ public class ImageFileController {
 
     @GetMapping("/images/{*imageKey}")
     public ResponseEntity<byte[]> getImage(@PathVariable String imageKey) {
-        StoredImage image = uploadService.loadImage(stripLeadingSlash(imageKey));
+        ImageFileContent image = dbImageFileService.load(stripLeadingSlash(imageKey));
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(image.contentType()))
                 .cacheControl(IMAGE_CACHE)
@@ -81,7 +83,7 @@ public class ImageFileController {
         }
     }
 
-    // 클라이언트가 붙이는 charset 같은 파라미터는 빼고 image/png 형태로만 비교한다
+    // 클라이언트가 붙이는 charset 같은 파라미터는 빼고 image/jpeg 형태로만 비교한다
     private String mimeType(String contentType) {
         try {
             MediaType mediaType = MediaType.parseMediaType(contentType);

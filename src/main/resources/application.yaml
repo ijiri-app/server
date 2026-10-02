@@ -64,7 +64,8 @@ oauth:
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
-# 사진 공개 URL·업로드 URL 의 앞부분 (사진 URL = public-base-url + /images/ + imageKey).
-# 지금은 이 서버 주소, S3 등으로 옮기면 CDN 주소
+# 사진 저장소. db: 로컬·테스트용(파일을 DB 에 두고 이 서버가 업로드·조회를 받음) / r2: 운영(Cloudflare R2)
+# 사진 URL = public-base-url + "/" + imageKey (운영은 R2 버킷에 연결한 커스텀 도메인, 예: https://img.ijiri.net)
 storage:
+  type: ${STORAGE_TYPE:db}
   public-base-url: ${STORAGE_PUBLIC_BASE_URL}

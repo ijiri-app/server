@@ -10,6 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SignupRequestTest {
 
+    // 65자
+    private static final String TOO_LONG_PASSWORD =
+            "a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1x";
+
     private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
     @Test
@@ -18,8 +22,8 @@ class SignupRequestTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"abc1234", "abcdefgh", "12345678", "abcdefghij1234567890x"})
-    void 비밀번호가_8_20자_영문_숫자_조건을_어기면_거부한다(String password) {
+    @ValueSource(strings = {"abc1234", "abcdefgh", "12345678", TOO_LONG_PASSWORD})
+    void 비밀번호가_8_64자_영문_숫자_조건을_어기면_거부한다(String password) {
         assertThat(validator.validate(request(password, "이지리")))
                 .anyMatch(violation -> violation.getPropertyPath().toString().equals("password"));
     }

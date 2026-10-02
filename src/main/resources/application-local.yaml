@@ -14,4 +14,7 @@ cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 storage:
-  public-base-url: ${STORAGE_PUBLIC_BASE_URL:http://localhost:8080}
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL:http://localhost:8080/images}
+  db:
+    # DB 저장소가 발급하는 업로드 URL 의 앞부분 (이 서버 주소)
+    server-url: ${STORAGE_DB_SERVER_URL:http://localhost:8080}

@@ -1,3 +1,12 @@
 server:
   # 리버스 프록시 뒤에서 X-Forwarded-For 로 실제 클라이언트 IP 를 얻는다 (요청 횟수 제한 키)
   forward-headers-strategy: native
+
+# 운영 사진 저장소는 Cloudflare R2. 값이 빠지면 기동에 실패한다
+storage:
+  type: r2
+  r2:
+    account-id: ${R2_ACCOUNT_ID}
+    access-key-id: ${R2_ACCESS_KEY_ID}
+    secret-access-key: ${R2_SECRET_ACCESS_KEY}
+    bucket: ${R2_BUCKET}

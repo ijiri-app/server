@@ -2,10 +2,9 @@ package ijiri.ijiriserver.domain.upload.service.impl;
 
 import ijiri.ijiriserver.domain.member.event.MemberProfileImageChangedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
-import ijiri.ijiriserver.domain.upload.client.DbImageStorageClient;
 import ijiri.ijiriserver.domain.upload.client.ImageStorageClient;
 import ijiri.ijiriserver.domain.upload.dto.AttachedImage;
-import ijiri.ijiriserver.domain.upload.dto.StoredImage;
+import ijiri.ijiriserver.domain.upload.dto.StoredObject;
 import ijiri.ijiriserver.domain.upload.dto.request.UploadUrlRequest;
 import ijiri.ijiriserver.domain.upload.dto.response.UploadResponse;
 import ijiri.ijiriserver.domain.upload.entity.UploadPurpose;
@@ -23,7 +22,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -33,7 +31,6 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -47,20 +44,17 @@ public class UploadServiceImpl implements UploadService {
     private static final int UPLOAD_LIMIT_PER_MEMBER = 100;
     private static final Duration UPLOAD_LIMIT_PERIOD = Duration.ofHours(1);
     private static final Duration UPLOAD_URL_VALIDITY = Duration.ofMinutes(10);
-    private static final Duration UNATTACHED_RETENTION = Duration.ofMinutes(10);
+    // R2 수명 주기 규칙(tmp/, 1일)과 같은 기준으로 연결되지 않은 업로드 기록을 지운다
+    private static final Duration UNATTACHED_RETENTION = Duration.ofDays(1);
+    private static final long MAX_FILE_BYTES = 10L * 1024 * 1024;
+    private static final int SIGNATURE_BYTES = 12;
     private static final Map<String, String> EXTENSIONS = Map.of(
             "image/jpeg", "jpg",
-            "image/png", "png",
-            "image/webp", "webp",
-            "image/heic", "heic"
+            "image/webp", "webp"
     );
-    private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A};
-    private static final Set<String> HEIC_BRANDS = Set.of("heic", "heix", "hevc", "hevx", "mif1", "msf1");
 
     private final UploadedImageRepository uploadedImageRepository;
     private final ImageStorageClient imageStorageClient;
-    // 서명 확인과 파일 저장·조회는 DB 저장소에만 있는 기능이다. S3 등으로 옮기면 저장소가 직접 받는다
-    private final DbImageStorageClient dbImageStorageClient;
     private final ImageUrlResolver imageUrlResolver;
     private final RateLimiter rateLimiter;
     private final Clock clock;
@@ -92,33 +86,8 @@ public class UploadServiceImpl implements UploadService {
         return new UploadResponse(items);
     }
 
-    // Content-Type 은 위조할 수 있으므로 파일 앞부분(시그니처)도 확인한다. JPEG 는 위치 정보가 남지 않도록 EXIF 를 지운다
-    @Override
-    @Transactional
-    public void receiveFile(String imageKey, long expires, String signature, String contentType, byte[] content) {
-        UploadedImage image = uploadedImageRepository.findByImageKey(imageKey)
-                .filter(found -> found.getContentType().equals(contentType))
-                .filter(found -> dbImageStorageClient.isValidSignature(imageKey, contentType, expires, signature))
-                .orElseThrow(() -> new CustomException(UploadStatusCode.INVALID_UPLOAD_URL));
-        if (image.getStatus() != UploadStatus.PENDING) {
-            throw new CustomException(UploadStatusCode.INVALID_UPLOAD_URL);
-        }
-        if (!matchesSignature(contentType, content)) {
-            throw new CustomException(UploadStatusCode.UNSUPPORTED_IMAGE);
-        }
-        byte[] stored = contentType.equals("image/jpeg") ? stripJpegMetadata(content) : content;
-        dbImageStorageClient.save(imageKey, contentType, stored);
-        image.markUploaded();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public StoredImage loadImage(String imageKey) {
-        return dbImageStorageClient.load(imageKey)
-                .map(file -> new StoredImage(file.getContentType(), file.getContent()))
-                .orElseThrow(() -> new CustomException(UploadStatusCode.IMAGE_NOT_FOUND));
-    }
-
+    // 서버는 파일을 거치지 않으므로 연결할 때 저장소에서 크기·형식(HEAD)과 파일 앞부분(시그니처)을 확인한 뒤
+    // 임시 키(tmp/)에서 영구 키로 옮긴다. 임시 키는 수명 주기 규칙으로 지워지므로 옮기지 않으면 사라진다
     @Override
     @Transactional
     public List<AttachedImage> attach(Long memberId, List<String> imageKeys, UploadPurpose purpose) {
@@ -128,15 +97,15 @@ public class UploadServiceImpl implements UploadService {
         Map<String, UploadedImage> images = uploadedImageRepository.findAllByImageKeyIn(imageKeys).stream()
                 .filter(image -> image.getMemberId().equals(memberId))
                 .filter(image -> image.getImageKey().startsWith(purpose.getKeyPrefix()))
-                .filter(image -> image.isUploaded() && imageStorageClient.exists(image.getImageKey()))
+                .filter(image -> !image.isAttached())
                 .collect(Collectors.toMap(UploadedImage::getImageKey, Function.identity()));
         if (new HashSet<>(imageKeys).size() != imageKeys.size() || images.size() != imageKeys.size()) {
             throw new CustomException(UploadStatusCode.INVALID_IMAGE);
         }
+        images.values().forEach(this::validateStoredFile);
         return imageKeys.stream()
                 .map(images::get)
-                .peek(UploadedImage::attach)
-                .map(image -> new AttachedImage(image.getImageKey(), imageUrlResolver.urlOf(image.getImageKey())))
+                .map(this::moveToPermanentKey)
                 .toList();
     }
 
@@ -158,8 +127,8 @@ public class UploadServiceImpl implements UploadService {
         return images.size();
     }
 
-    // 게시물을 지운 뒤 남은 업로드 기록과 파일을 지운다. 이후 롤백되면 남은 행을 다음 스케줄에 다시 지우고,
-    // 이미 없는 파일은 무시하므로 여러 번 실행돼도 안전하다
+    // 게시물을 지운 뒤 남은 업로드 기록과 파일(프로필 사진 포함)을 저장소에서 지운다.
+    // 이후 롤백되면 남은 행을 다음 스케줄에 다시 지우고, 이미 없는 파일은 무시하므로 여러 번 실행돼도 안전하다
     @Order(2)
     @EventListener
     @Transactional
@@ -167,7 +136,7 @@ public class UploadServiceImpl implements UploadService {
         deleteAll(uploadedImageRepository.findAllByMemberId(event.memberId()));
     }
 
-    // 새 프로필 사진은 이 회원이 PROFILE 용도로 올리고 아직 쓰이지 않은 사진이어야 한다. 아니면 예외로 프로필 변경을 롤백시킨다
+    // 새 프로필 사진은 이 회원이 PROFILE 용도로 받은 업로드여야 한다. 아니면 예외로 프로필 변경을 롤백시킨다
     @EventListener
     @Transactional
     public void changeProfileImage(MemberProfileImageChangedEvent event) {
@@ -181,24 +150,42 @@ public class UploadServiceImpl implements UploadService {
                 .ifPresent(image -> deleteAll(List.of(image)));
     }
 
+    private void validateStoredFile(UploadedImage image) {
+        StoredObject stored = imageStorageClient.head(image.getImageKey())
+                .orElseThrow(() -> new CustomException(UploadStatusCode.INVALID_IMAGE));
+        boolean valid = stored.size() > 0
+                && stored.size() <= MAX_FILE_BYTES
+                && image.getContentType().equals(stored.contentType())
+                && matchesSignature(image.getContentType(), imageStorageClient.readPrefix(
+                        image.getImageKey(),
+                        SIGNATURE_BYTES
+                ));
+        if (!valid) {
+            throw new CustomException(UploadStatusCode.INVALID_IMAGE);
+        }
+    }
+
+    private AttachedImage moveToPermanentKey(UploadedImage image) {
+        String uploadKey = image.getImageKey();
+        String permanentKey = imageUrlResolver.permanentKeyOf(uploadKey);
+        imageStorageClient.copy(uploadKey, permanentKey);
+        imageStorageClient.delete(uploadKey);
+        image.attach(permanentKey);
+        return new AttachedImage(permanentKey, imageUrlResolver.urlOf(permanentKey));
+    }
+
     private void deleteAll(List<UploadedImage> images) {
         uploadedImageRepository.deleteAll(images);
         images.forEach(image -> imageStorageClient.delete(image.getImageKey()));
     }
 
-    private boolean matchesSignature(String contentType, byte[] content) {
+    private boolean matchesSignature(String contentType, byte[] head) {
         return switch (contentType) {
-            case "image/jpeg" -> startsWith(content, new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF});
-            case "image/png" -> startsWith(content, PNG_SIGNATURE);
-            case "image/webp" -> ascii(content, 0, 4).equals("RIFF") && ascii(content, 8, 4).equals("WEBP");
-            case "image/heic" -> ascii(content, 4, 4).equals("ftyp") && HEIC_BRANDS.contains(ascii(content, 8, 4));
+            case "image/jpeg" -> head.length >= 3
+                    && Arrays.equals(head, 0, 3, new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}, 0, 3);
+            case "image/webp" -> ascii(head, 0, 4).equals("RIFF") && ascii(head, 8, 4).equals("WEBP");
             default -> false;
         };
-    }
-
-    private boolean startsWith(byte[] content, byte[] signature) {
-        return content.length >= signature.length
-                && Arrays.equals(content, 0, signature.length, signature, 0, signature.length);
     }
 
     private String ascii(byte[] content, int offset, int length) {
@@ -206,31 +193,5 @@ public class UploadServiceImpl implements UploadService {
             return "";
         }
         return new String(content, offset, length, StandardCharsets.US_ASCII);
-    }
-
-    // JPEG 의 APP1 세그먼트(EXIF, XMP: 위치 정보·촬영 기기 등)를 빼고 나머지는 그대로 둔다.
-    // 앱이 다시 인코딩하며 회전을 반영해 올리므로 EXIF 방향 정보가 없어도 된다. 구조가 이상하면 원본을 그대로 쓴다
-    private byte[] stripJpegMetadata(byte[] content) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(content.length);
-        out.write(content, 0, 2);
-        int position = 2;
-        while (position + 4 <= content.length && (content[position] & 0xFF) == 0xFF) {
-            int marker = content[position + 1] & 0xFF;
-            // SOS 부터는 압축된 이미지 데이터라 그대로 복사한다
-            if (marker == 0xDA) {
-                break;
-            }
-            int length = ((content[position + 2] & 0xFF) << 8) | (content[position + 3] & 0xFF);
-            int segmentEnd = position + 2 + length;
-            if (length < 2 || segmentEnd > content.length) {
-                return content;
-            }
-            if (marker != 0xE1) {
-                out.write(content, position, segmentEnd - position);
-            }
-            position = segmentEnd;
-        }
-        out.write(content, position, content.length - position);
-        return out.toByteArray();
     }
 }

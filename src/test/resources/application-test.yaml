@@ -23,4 +23,7 @@ cors:
   allowed-origins: http://localhost:3000
 
 storage:
-  public-base-url: http://localhost
+  type: db
+  public-base-url: http://localhost/images
+  db:
+    server-url: http://localhost

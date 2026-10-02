@@ -122,8 +122,10 @@ public record PostResponse(
         }
     }
 
+    // imageKey 는 게시물 수정에서 태그를 이 사진에 다시 걸 때 쓴다
     public record Image(
             Long id,
+            String imageKey,
             String url,
             int width,
             int height,
@@ -133,6 +135,7 @@ public record PostResponse(
         static Image of(PostImage image, List<PostPart> parts) {
             return new Image(
                     image.getId(),
+                    image.getImageKey(),
                     image.getUrl(),
                     image.getWidth(),
                     image.getHeight(),

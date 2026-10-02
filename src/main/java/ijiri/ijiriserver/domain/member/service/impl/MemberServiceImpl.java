@@ -41,13 +41,11 @@ import java.util.concurrent.ThreadLocalRandom;
 public class MemberServiceImpl implements MemberService, AdminVerifier {
 
     private static final String DEFAULT_NICKNAME_PREFIX = "이지리오너";
-    // 이메일 가입과 같은 닉네임 규칙(2~12자)을 소셜 닉네임에도 적용한다
-    private static final int MIN_NICKNAME_LENGTH = 2;
-    private static final int MAX_NICKNAME_LENGTH = 12;
-    private static final int NICKNAME_SUFFIX_DIGITS = 4;
     private static final int MAX_NICKNAME_TRIES = 10;
     // 탈퇴 후 회원 행과 데이터를 보관하는 기간. 이 기간 동안은 같은 계정으로 재가입할 수 없다
     private static final long WITHDRAWAL_RETENTION_DAYS = 30;
+    // 보관 기간이 지나고 매일 삭제를 시도해도 이만큼 실패하면, 포기할 수 있는 작업(소셜 연결 끊기)은 건너뛰고 삭제한다
+    private static final long PURGE_RETRY_DAYS = 3;
 
     private final MemberRepository memberRepository;
     private final MemberPostCounter memberPostCounter;
@@ -109,7 +107,7 @@ public class MemberServiceImpl implements MemberService, AdminVerifier {
         if (request.profileImageKey() != null) {
             profileImageUrl = request.profileImageKey().isBlank()
                     ? null
-                    : imageUrlResolver.urlOf(request.profileImageKey());
+                    : imageUrlResolver.urlOf(imageUrlResolver.permanentKeyOf(request.profileImageKey()));
         }
         String statusMessage = request.statusMessage() == null
                 ? member.getStatusMessage()
@@ -211,13 +209,16 @@ public class MemberServiceImpl implements MemberService, AdminVerifier {
     @Override
     @Transactional
     public void purge(Long memberId) {
+        LocalDateTime finalAttemptCutoff = LocalDateTime.now(clock)
+                .minusDays(WITHDRAWAL_RETENTION_DAYS + PURGE_RETRY_DAYS);
         memberRepository.findById(memberId)
                 .filter(Member::isWithdrawn)
                 .ifPresent(member -> {
                     eventPublisher.publishEvent(new MemberPurgedEvent(
                             memberId,
                             member.getProvider(),
-                            member.getProviderMemberId()
+                            member.getProviderMemberId(),
+                            member.getDeletedAt().isBefore(finalAttemptCutoff)
                     ));
                     memberRepository.delete(member);
                 });
@@ -236,43 +237,27 @@ public class MemberServiceImpl implements MemberService, AdminVerifier {
                 .provider(command.provider())
                 .providerMemberId(command.providerMemberId())
                 .email(command.email())
-                .nickname(uniqueNickname(command.nickname()))
+                .nickname(generateNickname())
                 .profileImageUrl(command.profileImageUrl())
                 .role(Role.USER)
                 .build();
     }
 
-    // 소셜 닉네임은 선택 동의라 없거나 규칙보다 짧거나 길 수 있고, 다른 회원과 겹칠 수 있다.
-    // 가입 단계에서 입력받지 않도록 긴 닉네임은 자르고, 없거나 짧으면 기본값을 쓰고, 겹치면 뒤에 숫자를 붙인다
-    private String uniqueNickname(String nickname) {
-        String base = baseNickname(nickname);
-        if (!memberRepository.existsByNickname(base)) {
-            return base;
-        }
-        String prefix = truncate(base, MAX_NICKNAME_LENGTH - NICKNAME_SUFFIX_DIGITS);
+    // 소셜 계정의 이름(구글 name 은 실명)은 공개 커뮤니티에 노출되면 안 되므로 쓰지 않고 항상 자동 생성한다.
+    // 나중에 PATCH /members/me 로 바꿀 수 있다
+    private String generateNickname() {
         for (int i = 0; i < MAX_NICKNAME_TRIES; i++) {
-            String candidate = prefix + ThreadLocalRandom.current().nextInt(1000, 10000);
+            String candidate = randomNickname();
             if (!memberRepository.existsByNickname(candidate)) {
                 return candidate;
             }
         }
         // 그래도 겹치면 저장할 때 유니크 제약에 걸려 OAuthService 가 한 번 더 시도한다
-        return prefix + ThreadLocalRandom.current().nextInt(1000, 10000);
+        return randomNickname();
     }
 
-    private String baseNickname(String nickname) {
-        String trimmed = nickname == null ? "" : nickname.strip();
-        if (trimmed.codePointCount(0, trimmed.length()) < MIN_NICKNAME_LENGTH) {
-            return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
-        }
-        return truncate(trimmed, MAX_NICKNAME_LENGTH);
-    }
-
-    private String truncate(String value, int maxCodePoints) {
-        return value.codePoints()
-                .limit(maxCodePoints)
-                .collect(StringBuilder::new, StringBuilder::appendCodePoint, StringBuilder::append)
-                .toString();
+    private String randomNickname() {
+        return DEFAULT_NICKNAME_PREFIX + ThreadLocalRandom.current().nextInt(1000, 10000);
     }
 
     private String emptyToNull(String value) {

@@ -146,7 +146,7 @@ class CommunityFlowIntegrationTest {
         String detail = mockMvc.perform(get("/posts/" + postId)).andReturn().getResponse().getContentAsString();
         int kept = JsonPath.read(detail, "$.result.parts[0].postPartId");
         int removed = JsonPath.read(detail, "$.result.parts[1].postPartId");
-        String imageKey = JsonPath.read(detail, "$.result.images[0].url").toString().replace(HOST + "/images/", "");
+        String imageKey = JsonPath.read(detail, "$.result.images[0].imageKey");
         String other = signup();
         wish(other, kept).andExpect(status().isCreated());
         wish(other, removed).andExpect(status().isCreated());
@@ -286,22 +286,44 @@ class CommunityFlowIntegrationTest {
     }
 
     @Test
-    void 사진이_아닌_파일은_올릴_수_없고_올린_사진은_공개_URL_로_조회된다() throws Exception {
+    void 이미지가_아닌_파일은_게시물에_연결할_수_없다() throws Exception {
         String token = signup();
         String json = requestUploadUrl(token);
         String uploadUrl = JsonPath.read(json, "$.result.items[0].uploadUrl");
         String imageKey = JsonPath.read(json, "$.result.items[0].imageKey");
-
-        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content("not an image".getBytes()))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value("UNSUPPORTED_IMAGE"));
-
-        byte[] png = pngBytes();
-        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content(png))
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/jpeg").content("not an image".getBytes()))
                 .andExpect(status().isOk());
-        mockMvc.perform(get("/images/" + imageKey))
+
+        createPostRequest(token, registerCar(token), imageKey, "[]")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_IMAGE"));
+    }
+
+    @Test
+    void 서명과_다른_Content_Type_으로는_올릴_수_없다() throws Exception {
+        String uploadUrl = JsonPath.read(requestUploadUrl(signup()), "$.result.items[0].uploadUrl");
+
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/webp").content(jpegBytes()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void 게시물에_연결된_사진은_tmp_를_뗀_영구_키로_옮겨지고_공개_URL_로_조회된다() throws Exception {
+        String token = signup();
+        String uploadKey = upload(token);
+        String json = createPostRequest(token, registerCar(token), uploadKey, "[]")
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        long postId = ((Number) JsonPath.read(json, "$.result.id")).longValue();
+
+        String permanentKey = uploadKey.substring("tmp/".length());
+        mockMvc.perform(get("/posts/" + postId))
+                .andExpect(jsonPath("$.result.images[0].imageKey").value(permanentKey))
+                .andExpect(jsonPath("$.result.images[0].url").value(HOST + "/images/" + permanentKey));
+        mockMvc.perform(get("/images/" + permanentKey))
                 .andExpect(status().isOk())
-                .andExpect(content().bytes(png));
+                .andExpect(content().bytes(jpegBytes()));
+        mockMvc.perform(get("/images/" + uploadKey)).andExpect(status().isNotFound());
     }
 
     @Test
@@ -377,7 +399,7 @@ class CommunityFlowIntegrationTest {
     private String upload(String token) throws Exception {
         String json = requestUploadUrl(token);
         String uploadUrl = JsonPath.read(json, "$.result.items[0].uploadUrl");
-        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/png").content(pngBytes()))
+        mockMvc.perform(put(uploadUrl.replace(HOST, "")).contentType("image/jpeg").content(jpegBytes()))
                 .andExpect(status().isOk());
         return JsonPath.read(json, "$.result.items[0].imageKey");
     }
@@ -385,7 +407,7 @@ class CommunityFlowIntegrationTest {
     private String requestUploadUrl(String token) throws Exception {
         return mockMvc.perform(authorized(post("/uploads/images"), token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"count\":1,\"contentType\":\"image/png\"}"))
+                        .content("{\"count\":1,\"contentType\":\"image/jpeg\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.items[0].expiresIn").value(600))
                 .andReturn().getResponse().getContentAsString();
@@ -412,9 +434,10 @@ class CommunityFlowIntegrationTest {
         return ((Number) JsonPath.read(json, "$.result.id")).longValue();
     }
 
-    private byte[] pngBytes() throws IOException {
+    // 항상 같은 바이트가 나오도록 고정 크기·검은색 이미지를 쓴다
+    private byte[] jpegBytes() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImageIO.write(new BufferedImage(3, 2, BufferedImage.TYPE_INT_RGB), "png", out);
+        ImageIO.write(new BufferedImage(3, 2, BufferedImage.TYPE_INT_RGB), "jpg", out);
         return out.toByteArray();
     }
 

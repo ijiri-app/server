@@ -1,8 +1,10 @@
 package ijiri.ijiriserver.domain.upload.client;
 
+import ijiri.ijiriserver.domain.upload.dto.StoredObject;
 import ijiri.ijiriserver.domain.upload.entity.ImageFile;
 import ijiri.ijiriserver.domain.upload.repository.ImageFileRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.Mac;
@@ -12,14 +14,16 @@ import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Optional;
 
 /**
- * 사진을 DB(image_file)에 저장하는 임시 저장소. 업로드 URL 은 S3 presigned URL 처럼
+ * 로컬·테스트용: 사진을 DB(image_file)에 저장한다. 업로드 URL 은 R2 presigned URL 처럼
  * 키·Content-Type·만료 시각에 대한 HMAC 서명을 붙인 이 서버의 주소(PUT /uploads/files/{key})다.
  */
 @Component
+@ConditionalOnProperty(name = "storage.type", havingValue = "db", matchIfMissing = true)
 public class DbImageStorageClient implements ImageStorageClient {
 
     private static final String UPLOAD_PATH = "/uploads/files/";
@@ -28,18 +32,18 @@ public class DbImageStorageClient implements ImageStorageClient {
     private static final String SIGNING_CONTEXT = "image-upload:";
 
     private final ImageFileRepository imageFileRepository;
-    private final String publicBaseUrl;
+    private final String serverUrl;
     private final byte[] signingKey;
     private final Clock clock;
 
     public DbImageStorageClient(
             ImageFileRepository imageFileRepository,
-            @Value("${storage.public-base-url}") String publicBaseUrl,
+            @Value("${storage.db.server-url}") String serverUrl,
             @Value("${jwt.secret}") String secret,
             Clock clock
     ) {
         this.imageFileRepository = imageFileRepository;
-        this.publicBaseUrl = publicBaseUrl;
+        this.serverUrl = serverUrl;
         this.signingKey = (SIGNING_CONTEXT + secret).getBytes(StandardCharsets.UTF_8);
         this.clock = clock;
     }
@@ -47,14 +51,28 @@ public class DbImageStorageClient implements ImageStorageClient {
     @Override
     public String createUploadUrl(String imageKey, String contentType, Duration validity) {
         long expires = clock.instant().plus(validity).getEpochSecond();
-        return publicBaseUrl + UPLOAD_PATH + imageKey
+        return serverUrl + UPLOAD_PATH + imageKey
                 + "?expires=" + expires
                 + "&signature=" + sign(imageKey, contentType, expires);
     }
 
     @Override
-    public boolean exists(String imageKey) {
-        return imageFileRepository.existsByImageKey(imageKey);
+    public Optional<StoredObject> head(String imageKey) {
+        return imageFileRepository.findByImageKey(imageKey)
+                .map(file -> new StoredObject(file.getContent().length, file.getContentType()));
+    }
+
+    @Override
+    public byte[] readPrefix(String imageKey, int length) {
+        return imageFileRepository.findByImageKey(imageKey)
+                .map(file -> Arrays.copyOf(file.getContent(), Math.min(length, file.getContent().length)))
+                .orElse(new byte[0]);
+    }
+
+    @Override
+    public void copy(String sourceKey, String targetKey) {
+        imageFileRepository.findByImageKey(sourceKey)
+                .ifPresent(file -> save(targetKey, file.getContentType(), file.getContent()));
     }
 
     @Override

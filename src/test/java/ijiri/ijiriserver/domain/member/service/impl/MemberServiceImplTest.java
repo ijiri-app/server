@@ -72,7 +72,8 @@ class MemberServiceImplTest {
 
         memberService.purge(1L);
 
-        verify(eventPublisher).publishEvent(new MemberPurgedEvent(1L, Provider.KAKAO, "kakao-1"));
+        // 보관 기간(30일) + 재시도 기간(3일)이 지났으므로 마지막 시도
+        verify(eventPublisher).publishEvent(new MemberPurgedEvent(1L, Provider.KAKAO, "kakao-1", true));
         verify(memberRepository).delete(member);
     }
 
@@ -86,27 +87,15 @@ class MemberServiceImplTest {
     }
 
     @Test
-    void 소셜_닉네임이_12자를_넘으면_12자로_자른다() {
+    void 소셜_가입은_제공자_이름을_쓰지_않고_닉네임을_자동_생성한다() {
         when(memberRepository.findByProviderAndProviderMemberId(any(), any())).thenReturn(Optional.empty());
         when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         MemberRegisterResult result = memberService.registerIfAbsent(
-                new MemberRegisterCommand(Provider.GOOGLE, "google-1", null, "  열세글자가넘는아주긴구글이름  ", null)
+                new MemberRegisterCommand(Provider.GOOGLE, "google-1", null, "홍길동", null)
         );
 
-        assertThat(result.member().getNickname()).isEqualTo("열세글자가넘는아주긴구글");
-    }
-
-    @Test
-    void 소셜_닉네임이_없거나_2자보다_짧으면_기본_닉네임을_만든다() {
-        when(memberRepository.findByProviderAndProviderMemberId(any(), any())).thenReturn(Optional.empty());
-        when(memberRepository.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
-        MemberRegisterResult result = memberService.registerIfAbsent(
-                new MemberRegisterCommand(Provider.KAKAO, "kakao-2", null, "김", null)
-        );
-
-        assertThat(result.member().getNickname()).startsWith("이지리오너");
+        assertThat(result.member().getNickname()).matches("이지리오너\\d{4}");
     }
 
     private Member kakaoMember(LocalDateTime deletedAt) {

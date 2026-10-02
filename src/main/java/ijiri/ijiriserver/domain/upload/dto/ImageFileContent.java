@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.upload.dto;
 
-public record StoredImage(
+public record ImageFileContent(
         String contentType,
         byte[] content
 ) {

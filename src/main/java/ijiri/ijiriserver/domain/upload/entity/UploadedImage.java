@@ -18,8 +18,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * 업로드 URL 을 발급한 사진 키. 앱이 파일을 올리면 UPLOADED, 게시물·프로필에 쓰이면 ATTACHED 가 되고,
- * 10분 안에 연결되지 않으면 UploadedImageCleanupScheduler 가 파일까지 지운다.
+ * 업로드 URL 을 발급한 사진. 게시물·프로필에 연결되면 ATTACHED 가 되고 imageKey 가 영구 키(tmp/ 제외)로 바뀐다.
+ * 하루 안에 연결되지 않으면 UploadedImageCleanupScheduler 가 파일까지 지운다.
  */
 @Entity
 @Getter
@@ -43,7 +43,7 @@ public class UploadedImage extends BaseTimeEntity {
     @Column(name = "member_id", nullable = false, updatable = false)
     private Long memberId;
 
-    @Column(name = "image_key", nullable = false, length = 100, updatable = false)
+    @Column(name = "image_key", nullable = false, length = 100)
     private String imageKey;
 
     @Column(name = "content_type", nullable = false, length = 30, updatable = false)
@@ -57,11 +57,12 @@ public class UploadedImage extends BaseTimeEntity {
         this.status = UploadStatus.UPLOADED;
     }
 
-    public void attach() {
+    public void attach(String permanentKey) {
+        this.imageKey = permanentKey;
         this.status = UploadStatus.ATTACHED;
     }
 
-    public boolean isUploaded() {
-        return status == UploadStatus.UPLOADED;
+    public boolean isAttached() {
+        return status == UploadStatus.ATTACHED;
     }
 }

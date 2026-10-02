@@ -87,19 +87,22 @@ public class PostServiceImpl implements PostService {
                 request.images().stream().map(PostImageRequest::imageKey).toList(),
                 UploadPurpose.POST
         );
+        // 태그는 업로드 때 받은 키로 사진을 가리키지만, 연결하면서 사진은 영구 키로 옮겨진다
+        Map<String, PostImage> imagesByRequestKey = new HashMap<>();
         IntStream.range(0, attached.size()).forEach(order -> {
             PostImageRequest image = request.images().get(order);
-            post.addImage(PostImage.builder()
+            PostImage postImage = PostImage.builder()
                     .post(post)
                     .imageKey(attached.get(order).imageKey())
                     .url(attached.get(order).url())
                     .width(image.width())
                     .height(image.height())
                     .displayOrder(order)
-                    .build()
-            );
+                    .build();
+            post.addImage(postImage);
+            imagesByRequestKey.put(image.imageKey(), postImage);
         });
-        post.replaceParts(buildParts(post, request.parts(), request.images(), Map.of()));
+        post.replaceParts(buildParts(post, request.parts(), request.images(), imagesByRequestKey, Map.of()));
         postRepository.save(post);
         partService.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), 1);
         return PostResponse.created(post.getId());
@@ -130,6 +133,7 @@ public class PostServiceImpl implements PostService {
                 post,
                 request.parts(),
                 request.images() != null ? request.images() : List.of(),
+                post.getImages().stream().collect(Collectors.toMap(PostImage::getImageKey, Function.identity())),
                 existing
         );
         List<Long> removed = existing.keySet().stream()
@@ -287,6 +291,7 @@ public class PostServiceImpl implements PostService {
             Post post,
             List<PostPartRequest> partRequests,
             List<PostImageRequest> imageRequests,
+            Map<String, PostImage> images,
             Map<Long, PostPart> existing
     ) {
         Map<String, PostPart> byRef = new HashMap<>();
@@ -305,8 +310,6 @@ public class PostServiceImpl implements PostService {
                 })
                 .toList();
 
-        Map<String, PostImage> images = post.getImages().stream()
-                .collect(Collectors.toMap(PostImage::getImageKey, Function.identity()));
         for (PostImageRequest imageRequest : imageRequests) {
             PostImage image = images.get(imageRequest.imageKey());
             for (PostTagRequest tag : imageRequest.tags()) {

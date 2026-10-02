@@ -42,7 +42,8 @@ ijiri.ijiriserver
 │   │   │   ├── dto/response      AuthResponse
 │   │   │   ├── exception         AuthStatusCode
 │   │   │   └── service           SocialUnlinkService (+ impl)
-│   │   ├── email                 POST /auth/signup, /auth/login/email, /auth/logout, /auth/password/reset,
+│   │   ├── email                 POST /auth/signup, /auth/login/email, /auth/logout,
+│   │   │   │                     /auth/password/reset/code, /auth/password/reset,
 │   │   │   │                     /auth/email/send-code, /auth/email/verify-code
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   │   ├── client  controller  dto/request  entity  repository
@@ -65,9 +66,10 @@ ijiri.ijiriserver
 │   │                             (insert-only); BuildStyle enum
 │   ├── ownedcar                  GET/POST /members/me/cars, PATCH/DELETE /members/me/cars/{id}
 │   ├── part                      GET /parts/suggest, /parts, /brands (Part, Brand, PartCategory)
-│   ├── upload                    POST /uploads/images (upload URLs); ImageStorageClient
-│   │                             (DbImageStorageClient: PUT /uploads/files/**, GET /images/** via
-│   │                             ImageFileController), UploadedImageCleanupScheduler
+│   ├── upload                    POST /uploads/images (presigned upload URLs); ImageStorageClient
+│   │                             (R2ImageStorageClient for prod; DbImageStorageClient for local/test
+│   │                             with ImageFileController: PUT /uploads/files/**, GET /images/**),
+│   │                             UploadedImageCleanupScheduler
 │   ├── post                      POST /posts, GET/PATCH/DELETE /posts/{id}, GET /feed,
 │   │                             GET /members/{id}/posts (PostController, FeedController)
 │   ├── wishlist                  POST /wishlist, DELETE /wishlist/{id}, GET /members/me/wishlist
@@ -175,7 +177,8 @@ Package rules:
   constructor needs `@Value` parameters or builds a field from its arguments; then write it by hand.
 - Constants: `private static final` UPPER_SNAKE_CASE, only when they add meaning.
 - Current time: always `LocalDateTime.now(clock)` with the injected `Clock`, never `now()`.
-- External HTTP clients use the `externalApiRequestFactory` bean, never `RestClient.create()`.
+- External HTTP clients use the `externalApiRequestFactory` bean, never `RestClient.create()`. The one
+  exception is the AWS SDK (`R2ImageStorageClient`), which has its own HTTP client; set its timeouts there.
 - Services never take `HttpServletRequest/Response`; cookies, IPs and headers are handled in controllers.
 - Transactions: class-level `@Transactional(readOnly = true)` on query-heavy impls, method-level
   `@Transactional` on writes.
@@ -254,7 +257,9 @@ These are invariants. Do not change them without being asked, and keep this sect
   runs daily at 04:00, reads targets 100 at a time and hard-deletes one transaction per member, in listener
   order wishlist (`@Order(0)`) -> posts with parts/tags (1) -> uploads and files (2) -> owned cars (3) ->
   others -> member row. Kakao unlink runs
-  after the withdrawal commit and is retried before the purge if it fails.
+  after the withdrawal commit and is retried before the purge if it fails; once the purge is 3 days overdue
+  (`MemberPurgedEvent.finalAttempt`) the unlink failure is logged and the purge proceeds, so the 30-day
+  deletion promise (Google Play policy) is kept.
 - Member identity = `provider + provider_member_id` (unique). Email members use `provider = EMAIL`,
   `provider_member_id = email`; passwords are BCrypt hashes.
 - Email sign-up: `send-code` (204) -> `verify-code` -> `signup`. 6-digit code bound to the email + purpose,
@@ -262,38 +267,44 @@ These are invariants. Do not change them without being asked, and keep this sect
   resend cooldown (`TOO_MANY_REQUESTS` with `retryAfterSeconds`; resend resets verification; the row is locked
   against concurrent resends). A correct code returns a `verificationToken` (10 min, single use, stored as a
   SHA-256 hash); sign-up consumes it in the same transaction that creates the member and signs in
-  (`isNewMember = true`, 200). For an already registered email `send-code` answers `EMAIL_ALREADY_EXISTS`
-  (spec decision: the app links to sign-in).
+  (`isNewMember = true`, 200). For an already registered (or withdrawn) email `send-code` answers the same
+  204 and only a notice mail is sent (no account enumeration; the app says "메일이 안 오면 이미 가입된 이메일일
+  수 있어요").
 - Sign-up requires the three consents (`agreements.age14/terms/privacy` all true) and a unique nickname
-  (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`). Social sign-up appends 4 digits when the nickname
-  is taken.
+  (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`).
 - Email sign-in errors are always `INVALID_CREDENTIALS`. 5 failures per email (registered or not) within
   15 min lock that email until the window ends (423 `ACCOUNT_LOCKED` with `retryAfterSeconds`); success or
   password reset clears the count. The lock duration is still an open question in the spec.
-- Rate limits (`RateLimiter`): sign-in 30 / 15 min per IP; verification-code 10 / h per IP; image upload
-  100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
-- Password reset: `send-code` with `purpose = RESET_PASSWORD` -> `verify-code` -> `POST /auth/password/reset`
-  with the `verificationToken` (204). For an email that is not an active email member `send-code` still
-  answers 204 and sends nothing. Reset consumes the token, changes the password and deletes all the member's
-  sessions in one transaction.
+- Rate limits (`RateLimiter`): sign-in 30 / 15 min per IP; sign-up and reset code sending 10 / h per IP;
+  upload URLs 100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
+- Password reset: `POST /auth/password/reset/code {email}` (204) -> `POST /auth/password/reset
+  {email, code, newPassword}` (204). Same code rules as sign-up (purpose `RESET_PASSWORD`). For an email that
+  is not an active email member the code API still answers 204 and sends nothing. The code check commits its
+  attempt count on its own; a correct code is consumed, then the password change and deletion of all the
+  member's sessions run in one transaction.
 - Suspension: `PATCH /admin/reports/{id}` with `SUSPEND_MEMBER` sets `member.suspended_until` and deletes the
   member's sessions; `TokenService.issue` rejects suspended members (`MEMBER_SUSPENDED`), covering every sign-in and
   refresh.
 - Admin: `/admin/**` checks the member's current role in the DB on every request (`AdminVerifier`), not the
   token's `role` claim. Admins sign up normally and get `role = ADMIN` set in the DB. Report processing
   records who (`resolved_by`), when and what.
-- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`, `/images/**`; PUT
-  `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
+- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`; with DB storage also
+  GET `/images/**` and PUT `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
   detail also exclude posts of members in a block relation (either direction).
-- Uploads: `POST /uploads/images` returns per image an `imageKey` and a 10-min `uploadUrl`; the app PUTs the
-  file there (<= 10 MB, Content-Type as requested, verified against the file signature; JPEG APP1/EXIF is
-  stripped). With the DB storage the URL is this server signed with HMAC-SHA256 over key, type and expiry.
-  Images not attached to a post (`posts/tmp/`) or profile (`profiles/tmp/`) within 10 min are deleted.
+- Uploads: the app crops, resizes, strips location data, masks plates and converts to JPEG/WebP, then PUTs
+  straight to storage; the server never receives the file in prod. `POST /uploads/images` returns per image a
+  temporary `imageKey` (`tmp/posts/...`, `tmp/profiles/...`) and a 10-min presigned `uploadUrl` with the
+  Content-Type (`image/jpeg` or `image/webp`) bound into the signature. When a post or profile uses the key,
+  the server checks the stored object (HEAD: <= 10 MB, same Content-Type; first bytes: real JPEG/WebP),
+  copies it to the permanent key without `tmp/` and deletes the temporary one (`INVALID_IMAGE` otherwise).
+  Unattached uploads are deleted after 1 day (server rows + R2 lifecycle rule on `tmp/`). Purge deletes the
+  member's files from storage. DB storage (local/test) signs its own URL with HMAC-SHA256.
 - Posts reference only the member's own owned car (`FORBIDDEN` otherwise); wishes reference `postPartId`,
   are removed with the post or part, and the author's own wishes are not counted.
-- Passwords: 8-20 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
+- Passwords: 8-64 chars, at least one letter and one digit, at most 72 UTF-8 bytes (`@MaxUtf8Bytes(72)`).
 - Social emails are stored only when the provider marks them verified; `member.email` is nullable.
-  Social nicknames: longer than 12 are cut to 12; missing or shorter than 2 get `이지리오너` + 4 digits.
+  Social sign-up never uses the provider's name (Google `name` is a real name); the nickname is always
+  generated as `이지리오너` + 4 digits (unique) and can be changed later.
 - Kakao API: only 400/401 mean an invalid provider token (`INVALID_PROVIDER_TOKEN`); other errors are
   `SOCIAL_SERVER_ERROR`. `APPLE` exists as a provider value but has no verifier yet (`UNSUPPORTED_PROVIDER`).
 - Secrets come from `.env` (never commit it). Never log passwords, tokens, or secrets.
@@ -312,10 +323,12 @@ Not problems today; revisit when the deployment changes.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
   Check against the actual deployment.
-- Image files are stored in the DB (`image_file`) and served by `ImageFileController` for now. When deploying
-  (AWS S3 or GCS), add an `ImageStorageClient` that issues real presigned URLs, point
-  `storage.public-base-url` at the bucket/CDN, and drop `DbImageStorageClient`, `ImageFileController` and
-  `image_file`. Post images store absolute URLs, so changing the base URL needs a data migration.
+- Images: prod uses Cloudflare R2 (`storage.type = r2`, `R2_*` env) behind a custom domain
+  (`STORAGE_PUBLIC_BASE_URL`, e.g. `https://img.ijiri.net`; `r2.dev` is not for production). The bucket needs
+  a lifecycle rule deleting `tmp/` objects after 1 day, and CORS allowing PUT from the app if web uploads are
+  added. Post images store absolute URLs, so changing the base URL needs a data migration.
+- DB backups: daily `pg_dump` to the second home server over an encrypted VPN (e.g. Tailscale), kept at most
+  30 days so withdrawn members' data does not outlive the 30-day promise in backups; restore-test once.
 - Part suggest uses keyword/alias match plus `pg_trgm` similarity. Vector (embedding) search from the spec
   is not implemented yet; it needs a multilingual embedding provider and `pgvector`.
 - If Kakao unlink fails after withdrawal, the link stays visible in the user's Kakao account until the purge

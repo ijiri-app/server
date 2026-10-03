@@ -357,6 +357,11 @@ Not problems today; revisit when the deployment changes.
 - Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
   CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)
-- Deploy: `cp .env.example .env`, fill it, then `docker compose up -d --build` (app + PostgreSQL 17 with
-  pgvector + Cloudflare Tunnel; the image runs the `prod` profile). Only the tunnel exposes the API; app and
-  DB listen on 127.0.0.1 of the host. The image build skips tests, so run `./gradlew test` before deploying.
+- Deploy: `cp .env.example .env`, fill it, then `docker compose up -d` (app image from GHCR + PostgreSQL 17
+  with pgvector + Cloudflare Tunnel; the image runs the `prod` profile; add `--build` to build locally). Only
+  the tunnel exposes the API; app and DB listen on 127.0.0.1 of the host.
+- CI/CD (`.github/workflows/ci-cd.yml`): pushes and PRs to `develop`/`main` run `./gradlew test`; pushes then
+  build and push `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy through the
+  self-hosted runner labeled `ijiri-server` on the server, which copies `docker-compose.yml` into the repository
+  variable `DEPLOY_DIR` (where `.env` lives), pulls the image and restarts. Roll back by running
+  `IMAGE_TAG=sha-<commit> docker compose up -d` in `DEPLOY_DIR`.

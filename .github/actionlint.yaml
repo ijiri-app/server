@@ -1,0 +1,4 @@
+# 서버에 설치한 self-hosted runner 의 사용자 정의 라벨
+self-hosted-runner:
+  labels:
+    - ijiri-server

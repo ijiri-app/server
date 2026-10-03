@@ -1,6 +1,7 @@
 # 운영 구성: Spring 서버 + PostgreSQL + Cloudflare Tunnel.
 # 공인 IP·포트포워딩 없이 cloudflared 가 Cloudflare 로 나가는 연결을 맺고, api 도메인 요청을 app:8080 으로 넘긴다.
-# 실행: cp .env.example .env 후 값 채우기 -> docker compose up -d --build
+# 실행: cp .env.example .env 후 값 채우기 -> docker compose up -d (GHCR 이미지) 또는 --build (직접 빌드)
+# 운영 배포는 main 에 push 하면 GitHub Actions(.github/workflows/ci-cd.yml)가 한다
 services:
   db:
     # 부품 이름 추천에 pgvector 를 붙일 예정이라 pgvector 가 들어간 PostgreSQL 17 이미지를 쓴다
@@ -23,8 +24,9 @@ services:
       retries: 10
 
   app:
+    # CI 가 GHCR 에 올린 이미지를 쓴다 (IMAGE_TAG 기본값은 main 브랜치 최신). 로컬에서는 --build 로 직접 빌드
+    image: ghcr.io/ijiri-app/server:${IMAGE_TAG:-main}
     build: .
-    image: ijiri-server:latest
     restart: unless-stopped
     env_file: .env
     environment:

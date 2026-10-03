@@ -1,0 +1,117 @@
+# develop, main 에 push 하면 테스트 -> 이미지 빌드(GHCR) 순서로 돌고, main 은 서버에 배포까지 한다.
+# 서버는 Cloudflare Tunnel 뒤에 있어 밖에서 SSH 로 들어갈 수 없으므로, 서버에 설치한 self-hosted runner 가 배포한다.
+name: CI/CD
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-cd-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Testcontainers 가 러너의 Docker 로 PostgreSQL 을 띄운다
+      - name: Test
+        run: ./gradlew test
+
+      - name: Upload test report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-report
+          path: build/reports/tests/test
+
+  build:
+    needs: test
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 브랜치 이름 태그(develop, main)와 커밋 SHA 태그를 함께 붙인다. 되돌릴 때는 SHA 태그로 띄운다
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.ref_name }}
+            ${{ env.IMAGE }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # 서버에 설치한 runner (라벨 ijiri-server)
+    runs-on: [self-hosted, ijiri-server]
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # .env 와 DB 볼륨은 서버의 DEPLOY_DIR 에 두고, compose 파일만 최신으로 덮어쓴다
+      - name: Deploy
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+          IMAGE_TAG: sha-${{ github.sha }}
+        run: |
+          test -n "$DEPLOY_DIR" || { echo "DEPLOY_DIR repository variable is not set"; exit 1; }
+          cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
+          cd "$DEPLOY_DIR"
+          docker compose pull app
+          docker compose up -d --no-build
+          docker image prune -f
+
+      # 새 버전이 기동하지 못하면(설정 누락, 마이그레이션 실패 등) 배포를 실패로 표시한다
+      - name: Wait for startup
+        env:
+          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
+        run: |
+          cd "$DEPLOY_DIR"
+          for _ in $(seq 1 60); do
+            if docker compose logs app --since 5m 2>&1 | grep -q "Started IjiriServerApplication"; then
+              echo "App started"; exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs app --tail 100
+          exit 1

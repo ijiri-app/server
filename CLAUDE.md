@@ -357,3 +357,6 @@ Not problems today; revisit when the deployment changes.
 - Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
   CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)
+- Deploy: `cp .env.example .env`, fill it, then `docker compose up -d --build` (app + PostgreSQL 17 with
+  pgvector + Cloudflare Tunnel; the image runs the `prod` profile). Only the tunnel exposes the API; app and
+  DB listen on 127.0.0.1 of the host. The image build skips tests, so run `./gradlew test` before deploying.

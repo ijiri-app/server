@@ -15,6 +15,7 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
+    # 보내는 사람 주소로도 쓴다 (VerificationMailClient)
     username: ${MAIL_USERNAME}
     # Gmail 은 계정 비밀번호가 아니라 앱 비밀번호
     password: ${MAIL_PASSWORD}
@@ -24,6 +25,9 @@ spring:
           auth: true
           starttls:
             enable: true
+          # 465(SSL) 포트만 여는 메일 서버(다음 스마트워크 등)는 MAIL_SSL=true, MAIL_PORT=465
+          ssl:
+            enable: ${MAIL_SSL:false}
           connectiontimeout: 5000
           timeout: 5000
           writetimeout: 5000

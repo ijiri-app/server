@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.service.impl;
 
 import ijiri.ijiriserver.domain.auth.common.dto.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
+import ijiri.ijiriserver.domain.auth.email.dto.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.dto.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.service.AuthService;
@@ -17,8 +18,11 @@ import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -27,56 +31,80 @@ public class AuthServiceImpl implements AuthService {
 
     // 없는 이메일로 로그인해도 BCrypt 비교를 한 번 수행해 응답 시간으로 가입 여부가 드러나지 않게 한다
     private static final String DUMMY_PASSWORD_HASH = "$2a$10$ADUVieyM54fCzHFbn9mvoumLLcttlgqVdwaYJu9QihGyTw570u1..";
-    private static final String SIGNIN_KEY_PREFIX = "signin:email:";
-    private static final int SIGNIN_LIMIT_PER_EMAIL = 10;
-    private static final Duration SIGNIN_LIMIT_PERIOD = Duration.ofMinutes(15);
+    // 계정(이메일)별 비밀번호 대입 방지: 첫 실패부터 15분 안에 5번 틀리면 남은 시간 동안 잠근다
+    private static final String SIGNIN_FAILURE_KEY_PREFIX = "signin:failure:";
+    private static final int MAX_SIGNIN_FAILURES = 5;
+    private static final Duration SIGNIN_LOCK_PERIOD = Duration.ofMinutes(15);
 
     private final MemberService memberService;
     private final EmailVerificationService emailVerificationService;
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
+    private final TransactionTemplate transactionTemplate;
 
-    // 인증 완료 기록을 먼저 소모해 이메일 소유가 증명된 뒤에만 가입하고, 중복 여부도 그때만 알려준다.
-    // 가입된 이메일로는 인증 코드가 발송되지 않으므로 중복 에러는 동시 가입 경합에서만 난다.
-    // 가입 직후 바로 서비스를 쓰도록(디자인: "구경하러 가기") 토큰까지 발급한다
+    // 인증 기록 소모, 회원 생성, 토큰 발급을 한 트랜잭션으로 묶어 중간에 실패하면 인증을 다시 쓸 수 있게 한다.
+    // 가입 직후 바로 서비스를 쓰도록 로그인 응답과 같은 형태로 돌려준다
     @Override
+    @Transactional
     public AuthResponse signup(SignupRequest request) {
-        emailVerificationService.consumeVerified(request.email());
+        emailVerificationService.consumeSignupToken(request.email(), request.verificationToken());
         Member member = memberService.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),
                 passwordEncoder.encode(request.password())
         ));
-        return tokenService.issue(member).withSignIn(true, MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(true, MemberResponse.summary(member));
     }
 
-    // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답한다.
-    // 비밀번호 대입을 막기 위해 계정(이메일)별 시도 횟수를 제한한다
+    // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답하고,
+    // 실패 횟수도 가입 여부와 무관하게 이메일별로 세어 잠근다
     @Override
     public AuthResponse signIn(SignInRequest request) {
-        rateLimiter.check(SIGNIN_KEY_PREFIX + request.email(), SIGNIN_LIMIT_PER_EMAIL, SIGNIN_LIMIT_PERIOD);
+        String failureKey = SIGNIN_FAILURE_KEY_PREFIX + request.email();
+        if (rateLimiter.isExhausted(failureKey, MAX_SIGNIN_FAILURES)) {
+            throw new CustomException(
+                    AuthStatusCode.ACCOUNT_LOCKED,
+                    Map.of("retryAfterSeconds", rateLimiter.retryAfterSeconds(failureKey))
+            );
+        }
 
         Optional<Member> found = memberService.findEmailMember(request.email());
         String passwordHash = found.map(Member::getPassword).orElse(DUMMY_PASSWORD_HASH);
         boolean matches = passwordEncoder.matches(request.password(), passwordHash);
-        Member member = found.filter(ignored -> matches)
-                .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_CREDENTIALS));
+        if (found.isEmpty() || !matches) {
+            rateLimiter.tryAcquire(failureKey, MAX_SIGNIN_FAILURES, SIGNIN_LOCK_PERIOD);
+            throw new CustomException(AuthStatusCode.INVALID_CREDENTIALS);
+        }
+        rateLimiter.reset(failureKey);
+        Member member = found.get();
         // 비밀번호가 맞은 뒤에만 탈퇴 여부를 알려, 탈퇴 계정 존재가 제3자에게 드러나지 않게 한다
         if (member.isWithdrawn()) {
             throw new CustomException(MemberStatusCode.MEMBER_WITHDRAWN);
         }
-        return tokenService.issue(member).withSignIn(false, MemberResponse.from(member));
+        return tokenService.issue(member).withSignIn(false, MemberResponse.summary(member));
     }
 
     // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
-    public AuthResponse signOut(Long memberId) {
-        return tokenService.signOut(memberId);
+    public void signOut(Long memberId) {
+        tokenService.signOut(memberId);
     }
 
     @Override
-    public AuthResponse signOutByRefreshToken(String refreshToken) {
-        return tokenService.signOutByRefreshToken(refreshToken);
+    public void signOutByRefreshToken(String refreshToken) {
+        tokenService.signOutByRefreshToken(refreshToken);
+    }
+
+    // 코드 확인은 틀린 시도 횟수가 남도록 자기 트랜잭션에서 하고, 맞으면 비밀번호 변경과 세션 폐기를 한 트랜잭션으로 묶는다.
+    // 비밀번호를 잊어 잠긴 계정도 재설정 후 바로 로그인할 수 있도록 실패 횟수를 지운다
+    @Override
+    public void resetPassword(PasswordResetRequest request) {
+        emailVerificationService.consumeResetCode(request.email(), request.code());
+        String encoded = passwordEncoder.encode(request.newPassword());
+        transactionTemplate.executeWithoutResult(status -> tokenService.signOut(
+                memberService.changePassword(request.email(), encoded)
+        ));
+        rateLimiter.reset(SIGNIN_FAILURE_KEY_PREFIX + request.email());
     }
 }

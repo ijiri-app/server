@@ -21,3 +21,9 @@ oauth:
 
 cors:
   allowed-origins: http://localhost:3000
+
+storage:
+  type: db
+  public-base-url: http://localhost/images
+  db:
+    server-url: http://localhost

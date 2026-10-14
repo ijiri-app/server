@@ -1,5 +1,6 @@
 package ijiri.ijiriserver.domain.interestcar.service.impl;
 
+import ijiri.ijiriserver.domain.carmodel.service.CarModelService;
 import ijiri.ijiriserver.domain.interestcar.dto.response.InterestCarResponse;
 import ijiri.ijiriserver.domain.interestcar.entity.MemberInterestCar;
 import ijiri.ijiriserver.domain.interestcar.exception.InterestCarStatusCode;
@@ -19,30 +20,50 @@ import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class InterestCarServiceImpl implements InterestCarService {
 
     private final MemberInterestCarRepository memberInterestCarRepository;
     private final MemberService memberService;
+    private final CarModelService carModelService;
+
+    @Override
+    public InterestCarResponse getAll(Long memberId) {
+        return InterestCarResponse.from(carModelService.getCarModelInfos(getCarModelIds(memberId)));
+    }
 
     @Override
     @Transactional
-    public InterestCarResponse replaceAll(Long memberId, List<Long> carModelIds) {
+    public void replaceAll(Long memberId, List<Long> carModelIds) {
         // 탈퇴 후 만료 전 access token 으로 들어온 요청이 데이터를 다시 만들지 않도록 활성 회원만 허용
         memberService.getById(memberId);
         if (new HashSet<>(carModelIds).size() != carModelIds.size()) {
             throw new CustomException(InterestCarStatusCode.DUPLICATE_CAR_MODEL);
         }
+        // 관리자가 숨긴 차종이라도 이미 고른 것은 남겨 둘 수 있게, 새로 추가하는 차종만 확인한다
+        List<Long> current = getCarModelIds(memberId);
+        carModelService.validateCarModelsExist(carModelIds.stream()
+                .filter(carModelId -> !current.contains(carModelId))
+                .toList()
+        );
 
         memberInterestCarRepository.deleteAllByMemberIdInBulk(memberId);
-        List<MemberInterestCar> interestCars = IntStream.range(0, carModelIds.size())
+        memberInterestCarRepository.saveAll(IntStream.range(0, carModelIds.size())
                 .mapToObj(order -> MemberInterestCar.builder()
                         .memberId(memberId)
                         .carModelId(carModelIds.get(order))
                         .displayOrder(order)
                         .build()
                 )
+                .toList()
+        );
+    }
+
+    @Override
+    public List<Long> getCarModelIds(Long memberId) {
+        return memberInterestCarRepository.findAllByMemberIdOrderByDisplayOrderAsc(memberId).stream()
+                .map(MemberInterestCar::getCarModelId)
                 .toList();
-        return InterestCarResponse.from(memberInterestCarRepository.saveAll(interestCars));
     }
 
     @EventListener

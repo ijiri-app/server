@@ -7,6 +7,8 @@ import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -46,11 +48,26 @@ public class SocialUnlinkServiceImpl implements SocialUnlinkService {
         }
     }
 
-    // 실패하면 예외로 영구 삭제가 롤백되고 다음 스케줄에 다시 시도된다
+    // 실패하면 예외로 영구 삭제가 롤백되고 다음 스케줄에 다시 시도된다.
+    // 며칠째 실패한 마지막 시도라면 연결 끊기를 포기하고 삭제를 진행한다 (30일 삭제 약속이 우선)
+    // 되돌릴 수 없는 외부 호출이 실패하면 다른 리스너가 일을 하기 전에 멈추도록 영구 삭제 리스너 중 가장 먼저 실행한다
     @Override
+    @Order(Ordered.HIGHEST_PRECEDENCE)
     @EventListener
     public void unlinkBeforePurge(MemberPurgedEvent event) {
-        unlink(event.provider(), event.providerMemberId());
+        try {
+            unlink(event.provider(), event.providerMemberId());
+        } catch (RuntimeException e) {
+            if (!event.finalAttempt()) {
+                throw e;
+            }
+            log.error(
+                    "Social unlink gave up, purging anyway: memberId={}, provider={}",
+                    event.memberId(),
+                    event.provider(),
+                    e
+            );
+        }
     }
 
     // 연결 끊기가 필요 없는 provider(구글, 이메일)는 구현체가 없으므로 아무것도 하지 않는다

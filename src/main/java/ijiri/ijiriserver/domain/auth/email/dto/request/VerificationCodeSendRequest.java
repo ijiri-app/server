@@ -6,8 +6,11 @@ import jakarta.validation.constraints.NotBlank;
 
 import java.util.Locale;
 
+/**
+ * 가입용 인증 코드 발송과 비밀번호 재설정 코드 발송에 함께 쓴다.
+ */
 public record VerificationCodeSendRequest(
-        @Schema(description = "인증할 이메일", example = "user@ijiri.com")
+        @Schema(description = "이메일", example = "user@ijiri.com")
         @NotBlank @Email String email
 ) {
 

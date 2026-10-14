@@ -37,3 +37,6 @@ out/
 .vscode/
 
 .env
+
+# deploy.sh 가 만드는 서비스 중인 색 (배포 서버의 상태)
+nginx/upstream.conf

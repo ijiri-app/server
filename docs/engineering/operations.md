@@ -20,14 +20,24 @@ so integration tests give each request its own remote IP.
 - Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
   CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)
-- Deploy: `cp .env.example .env`, fill it, then `docker compose up -d` (app image from GHCR + PostgreSQL 17
-  with pgvector + Cloudflare Tunnel; the image runs the `prod` profile; add `--build` to build locally). Only
-  the tunnel exposes the API; app and DB listen on 127.0.0.1 of the host.
+- Deploy: `cp .env.example .env`, fill it, then `./deploy.sh <image tag>` (e.g. `sha-<commit>`). Compose runs
+  PostgreSQL 17 with pgvector, two app slots `app-blue` / `app-green` (compose profiles, so a plain
+  `docker compose up -d` starts neither), nginx and Cloudflare Tunnel. The tunnel's public hostname points to
+  `http://nginx:80`; nginx routes to the one slot named in `nginx/upstream.conf`, which `deploy.sh` writes.
+  `deploy.sh` starts the new image on the idle slot, waits until it answers HTTP on its localhost port
+  (blue 8081, green 8082), switches nginx with a reload, then stops the old slot after a short drain (Spring
+  graceful shutdown, `stop_grace_period: 40s`). If the new slot does not start, nginx is left untouched and
+  the new slot is stopped. It keeps the 3 newest images for rollback. nginx listens on 127.0.0.1:8080, the
+  slots on 8081/8082 and the DB on 5432, all on the host's localhost only; only the tunnel exposes the API.
+  Remove everything with `docker compose --profile '*' down`.
+- Blue/green runs old and new versions side by side for a moment and both apply to the same DB: Flyway
+  migrations must stay compatible with the previous version (add first, drop or rename in a later release).
+  `@Scheduled` jobs may run in both slots during the overlap, so they must stay idempotent.
 - CI/CD (`.github/workflows/ci-cd.yml`): pushes and PRs to `develop`/`main` run `./gradlew test`; pushes then
   build and push `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy through the
-  self-hosted runner labeled `ijiri-server` on the server, which copies `docker-compose.yml` into the repository
-  variable `DEPLOY_DIR` (where `.env` lives), pulls the image and restarts. Roll back by running
-  `IMAGE_TAG=sha-<commit> docker compose up -d` in `DEPLOY_DIR`.
+  self-hosted runner labeled `ijiri-server` on the server, which copies `docker-compose.yml`, `deploy.sh` and
+  `nginx/default.conf` into the repository variable `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live)
+  and runs `./deploy.sh sha-<commit>`. Roll back by running `./deploy.sh sha-<older commit>` in `DEPLOY_DIR`.
 
 ## Operational notes
 

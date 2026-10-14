@@ -88,30 +88,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # .env 와 DB 볼륨은 서버의 DEPLOY_DIR 에 두고, compose 파일만 최신으로 덮어쓴다
-      - name: Deploy
+      # .env, DB 볼륨, 서비스 중인 색(nginx/upstream.conf)은 서버의 DEPLOY_DIR 에 두고 배포 파일만 최신으로 덮어쓴다.
+      # deploy.sh 가 쉬는 색에 새 버전을 띄우고, 응답하면 nginx 를 돌린다. 뜨지 못하면 배포를 실패로 표시한다
+      - name: Deploy (blue/green)
         env:
           DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
           IMAGE_TAG: sha-${{ github.sha }}
         run: |
           test -n "$DEPLOY_DIR" || { echo "DEPLOY_DIR repository variable is not set"; exit 1; }
-          cp docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
-          cd "$DEPLOY_DIR"
-          docker compose pull app
-          docker compose up -d --no-build
-          docker image prune -f
-
-      # 새 버전이 기동하지 못하면(설정 누락, 마이그레이션 실패 등) 배포를 실패로 표시한다
-      - name: Wait for startup
-        env:
-          DEPLOY_DIR: ${{ vars.DEPLOY_DIR }}
-        run: |
-          cd "$DEPLOY_DIR"
-          for _ in $(seq 1 60); do
-            if docker compose logs app --since 5m 2>&1 | grep -q "Started IjiriServerApplication"; then
-              echo "App started"; exit 0
-            fi
-            sleep 2
-          done
-          docker compose logs app --tail 100
-          exit 1
+          mkdir -p "$DEPLOY_DIR/nginx"
+          cp docker-compose.yml deploy.sh "$DEPLOY_DIR/"
+          cp nginx/default.conf "$DEPLOY_DIR/nginx/default.conf"
+          "$DEPLOY_DIR/deploy.sh" "$IMAGE_TAG"

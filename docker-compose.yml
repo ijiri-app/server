@@ -9,6 +9,7 @@ services:
     # 부품 이름 추천에 pgvector 를 붙일 예정이라 pgvector 가 들어간 PostgreSQL 17 이미지를 쓴다
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    mem_limit: 4g
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${DB_USERNAME}
@@ -40,7 +41,8 @@ services:
     # deploy.sh 가 nginx 로 돌리기 전에 이 포트로 기동을 확인한다. localhost 에만 연다
     ports:
       - "127.0.0.1:8081:8080"
-    mem_limit: 1g
+    # 컨테이너마다 4g 까지. 배포 중 blue/green 이 함께 떠도(8g) DB 와 합쳐 서버 메모리(16g) 안에 든다
+    mem_limit: 4g
     # Spring 의 graceful shutdown(처리 중인 요청 마무리, 최대 30초)이 끝날 때까지 기다린다
     stop_grace_period: 40s
 
@@ -53,6 +55,7 @@ services:
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
+    mem_limit: 4g
     # default.conf 와 deploy.sh 가 만드는 upstream.conf 가 함께 읽힌다
     volumes:
       - ./nginx:/etc/nginx/conf.d:ro
@@ -63,6 +66,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
+    mem_limit: 4g
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}

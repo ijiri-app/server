@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.global.ratelimit;
 
-import ijiri.ijiriserver.global.exception.CustomException;
+import ijiri.ijiriserver.global.exception.exception.CustomException;
 import org.junit.jupiter.api.Test;
 
 import java.time.Clock;

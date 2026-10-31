@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.global.ratelimit;
 
-import ijiri.ijiriserver.global.exception.CommonStatusCode;
-import ijiri.ijiriserver.global.exception.CustomException;
+import ijiri.ijiriserver.global.exception.status_code.CommonStatusCode;
+import ijiri.ijiriserver.global.exception.exception.CustomException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;

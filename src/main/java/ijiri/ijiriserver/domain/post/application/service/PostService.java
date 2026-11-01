@@ -189,9 +189,8 @@ public class PostService implements CreatePostUseCase,
                 .filter(found -> found.isPublic()
                         || (found.isWrittenBy(viewerId) && found.getStatus() == PostStatus.HIDDEN))
                 .orElseThrow(() -> new CustomException(PostStatusCode.POST_NOT_FOUND));
-        if (viewerId != null && getHiddenMemberIdsBlockUseCase.getHiddenMemberIds(
-                viewerId).contains(post.getMemberId())
-        ) {
+        if (viewerId != null
+                && getHiddenMemberIdsBlockUseCase.getHiddenMemberIds(viewerId).contains(post.getMemberId())) {
             throw new CustomException(PostStatusCode.POST_NOT_FOUND);
         }
         Member author = findActiveMemberUseCase.findActiveMember(post.getMemberId()).orElse(null);

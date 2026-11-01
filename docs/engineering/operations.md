@@ -35,7 +35,8 @@ so integration tests give each request its own remote IP.
   `@Scheduled` jobs may run in both slots during the overlap, so they must stay idempotent.
 - CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test`. Pushes skip tests
   and docs-only changes, build the jar with the Gradle cache, then build (`--target ci`) and push
-  `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy through the
+  `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy (only when the repository
+  variable `DEPLOY_ENABLED` is `true`) through the
   self-hosted runner labeled `ijiri-server` on the server, which copies `docker-compose.yml`, `deploy.sh` and
   `nginx/default.conf` into the repository variable `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live)
   and runs `./deploy.sh sha-<commit>`. Roll back by running `./deploy.sh sha-<older commit>` in `DEPLOY_DIR`.

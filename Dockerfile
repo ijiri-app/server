@@ -11,10 +11,9 @@ COPY src src
 RUN ./gradlew bootJar --no-daemon -x test
 
 # 실행: JRE 만 담고 root 가 아닌 사용자로 띄운다
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre AS runtime
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app app
-COPY --from=build /workspace/build/libs/IjiriServer-*-SNAPSHOT.jar app.jar
 USER app
 
 ENV SPRING_PROFILES_ACTIVE=prod \
@@ -22,3 +21,11 @@ ENV SPRING_PROFILES_ACTIVE=prod \
 EXPOSE 8080
 # 컨테이너 메모리 제한에 맞춰 힙 크기를 정한다
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/app.jar"]
+
+# CI: 앞 단계에서 만든 jar 를 그대로 담는다 (build/libs 를 컨텍스트로 --target ci)
+FROM runtime AS ci
+COPY --chown=app:app IjiriServer-*-SNAPSHOT.jar app.jar
+
+# 로컬 기본 대상: 이미지 안에서 빌드한다
+FROM runtime AS local
+COPY --from=build --chown=app:app /workspace/build/libs/IjiriServer-*-SNAPSHOT.jar app.jar

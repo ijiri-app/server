@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.wishlist.exception;
 
-import ijiri.ijiriserver.global.exception.StatusCode;
+import ijiri.ijiriserver.global.exception.status_code.StatusCode;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

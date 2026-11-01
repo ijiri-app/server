@@ -1,7 +1,9 @@
 package ijiri.ijiriserver.domain.block.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.block.application.data.response.BlockResponse;
-import ijiri.ijiriserver.domain.block.application.port.in.BlockUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.BlockMemberUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.GetBlockedMembersUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.UnblockUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -23,7 +25,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class BlockController {
 
-    private final BlockUseCase blockUseCase;
+    private final BlockMemberUseCase blockMemberUseCase;
+    private final GetBlockedMembersUseCase getBlockedMembersUseCase;
+    private final UnblockUseCase unblockUseCase;
 
     @Operation(
             summary = "사용자 차단",
@@ -35,7 +39,7 @@ public class BlockController {
             @Parameter(hidden = true) @AuthenticationPrincipal String blockerId,
             @PathVariable Long memberId
     ) {
-        blockUseCase.block(Long.valueOf(blockerId), memberId);
+        blockMemberUseCase.block(Long.valueOf(blockerId), memberId);
     }
 
     @Operation(
@@ -48,7 +52,7 @@ public class BlockController {
             @Parameter(hidden = true) @AuthenticationPrincipal String blockerId,
             @PathVariable Long memberId
     ) {
-        blockUseCase.unblock(Long.valueOf(blockerId), memberId);
+        unblockUseCase.unblock(Long.valueOf(blockerId), memberId);
     }
 
     @Operation(
@@ -59,6 +63,6 @@ public class BlockController {
     public BaseResponse<BlockResponse> getBlockedMembers(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(blockUseCase.getBlockedMembers(Long.valueOf(memberId)));
+        return BaseResponse.ok(getBlockedMembersUseCase.getBlockedMembers(Long.valueOf(memberId)));
     }
 }

@@ -3,7 +3,11 @@ package ijiri.ijiriserver.domain.post.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.post.application.data.request.PostCreateRequest;
 import ijiri.ijiriserver.domain.post.application.data.request.PostUpdateRequest;
 import ijiri.ijiriserver.domain.post.application.data.response.PostResponse;
-import ijiri.ijiriserver.domain.post.application.port.in.PostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.CreatePostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.DeletePostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetMemberPostsUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.UpdatePostUseCase;
 import ijiri.ijiriserver.domain.post.entity.Post;
 import ijiri.ijiriserver.domain.post.exception.PostStatusCode;
 import ijiri.ijiriserver.global.data.BaseResponse;
@@ -32,7 +36,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PostController {
 
-    private final PostUseCase postUseCase;
+    private final CreatePostUseCase createPostUseCase;
+    private final DeletePostUseCase deletePostUseCase;
+    private final GetMemberPostsUseCase getMemberPostsUseCase;
+    private final GetPostUseCase getPostUseCase;
+    private final UpdatePostUseCase updatePostUseCase;
 
     @Operation(
             summary = "게시물 올리기",
@@ -46,7 +54,10 @@ public class PostController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody PostCreateRequest request
     ) {
-        return BaseResponse.of(PostStatusCode.CREATE_SUCCESS, postUseCase.create(Long.valueOf(memberId), request));
+        return BaseResponse.of(
+                PostStatusCode.CREATE_SUCCESS,
+                createPostUseCase.create(Long.valueOf(memberId), request)
+        );
     }
 
     @Operation(
@@ -60,7 +71,7 @@ public class PostController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long postId
     ) {
-        return BaseResponse.ok(postUseCase.getPost(toMemberId(memberId), postId));
+        return BaseResponse.ok(getPostUseCase.getPost(toMemberId(memberId), postId));
     }
 
     @Operation(
@@ -75,7 +86,7 @@ public class PostController {
             @PathVariable Long postId,
             @Valid @RequestBody PostUpdateRequest request
     ) {
-        postUseCase.update(Long.valueOf(memberId), postId, request);
+        updatePostUseCase.update(Long.valueOf(memberId), postId, request);
     }
 
     @Operation(
@@ -88,7 +99,7 @@ public class PostController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long postId
     ) {
-        postUseCase.delete(Long.valueOf(memberId), postId);
+        deletePostUseCase.delete(Long.valueOf(memberId), postId);
     }
 
     @Operation(
@@ -104,7 +115,7 @@ public class PostController {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(postUseCase.getMemberPosts(toMemberId(viewerId), memberId, cursor, size));
+        return BaseResponse.ok(getMemberPostsUseCase.getMemberPosts(toMemberId(viewerId), memberId, cursor, size));
     }
 
     // 공개 API 라 비로그인이면 principal 이 null 이다

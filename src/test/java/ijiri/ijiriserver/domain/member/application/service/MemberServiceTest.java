@@ -35,7 +35,7 @@ class MemberServiceTest {
 
     private final MemberPort memberPort = mock(MemberPort.class);
     private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
-    private final MemberService memberUseCase = new MemberService(
+    private final MemberService memberService = new MemberService(
             memberPort,
             mock(MemberPostCounter.class),
             mock(MemberWishCounter.class),
@@ -49,7 +49,7 @@ class MemberServiceTest {
         Member member = kakaoMember(null);
         when(memberPort.findByIdAndDeletedAtIsNull(1L)).thenReturn(Optional.of(member));
 
-        memberUseCase.withdraw(1L);
+        memberService.withdraw(1L);
 
         assertThat(member.getDeletedAt()).isEqualTo(LocalDateTime.ofInstant(NOW, ZoneOffset.UTC));
         verify(memberPort, never()).delete(any());
@@ -62,7 +62,7 @@ class MemberServiceTest {
                 .thenReturn(Optional.of(kakaoMember(LocalDateTime.of(2026, 1, 20, 0, 0))));
         MemberRegisterCommand command = new MemberRegisterCommand(Provider.KAKAO, "kakao-1", null, null, null);
 
-        assertThatThrownBy(() -> memberUseCase.registerIfAbsent(command)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> memberService.registerIfAbsent(command)).isInstanceOf(CustomException.class);
     }
 
     @Test
@@ -70,7 +70,7 @@ class MemberServiceTest {
         Member member = kakaoMember(LocalDateTime.of(2025, 12, 1, 0, 0));
         when(memberPort.findById(1L)).thenReturn(Optional.of(member));
 
-        memberUseCase.purge(1L);
+        memberService.purge(1L);
 
         // 보관 기간(30일) + 재시도 기간(3일)이 지났으므로 마지막 시도
         verify(eventPublisher).publishEvent(new MemberPurgedEvent(1L, Provider.KAKAO, "kakao-1", true));
@@ -81,7 +81,7 @@ class MemberServiceTest {
     void 탈퇴하지_않은_회원은_영구_삭제하지_않는다() {
         when(memberPort.findById(1L)).thenReturn(Optional.of(kakaoMember(null)));
 
-        memberUseCase.purge(1L);
+        memberService.purge(1L);
 
         verify(memberPort, never()).delete(any());
     }
@@ -91,7 +91,7 @@ class MemberServiceTest {
         when(memberPort.findByProviderAndProviderMemberId(any(), any())).thenReturn(Optional.empty());
         when(memberPort.save(any(Member.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        MemberRegisterResult result = memberUseCase.registerIfAbsent(
+        MemberRegisterResult result = memberService.registerIfAbsent(
                 new MemberRegisterCommand(Provider.GOOGLE, "google-1", null, "홍길동", null)
         );
 

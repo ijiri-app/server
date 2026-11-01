@@ -1,17 +1,23 @@
 package ijiri.ijiriserver.domain.ownedcar.application.service;
 
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetSpecByTrimCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateModelYearCarModelUseCase;
 import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.CarModelUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
-import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarSnapshot;
 import ijiri.ijiriserver.domain.ownedcar.application.data.request.OwnedCarCreateRequest;
 import ijiri.ijiriserver.domain.ownedcar.application.data.request.OwnedCarUpdateRequest;
 import ijiri.ijiriserver.domain.ownedcar.application.data.response.OwnedCarResponse;
-import ijiri.ijiriserver.domain.ownedcar.application.port.in.OwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.CreateOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.DeleteOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetAllOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetSnapshotOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetSnapshotsOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.UpdateOwnedCarUseCase;
 import ijiri.ijiriserver.domain.ownedcar.application.port.out.OwnedCarPort;
 import ijiri.ijiriserver.domain.ownedcar.application.port.out.OwnedCarPostCounter;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarSnapshot;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 import ijiri.ijiriserver.domain.ownedcar.exception.OwnedCarStatusCode;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -29,13 +35,19 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class OwnedCarService implements OwnedCarUseCase {
+public class OwnedCarService implements GetAllOwnedCarUseCase,
+        CreateOwnedCarUseCase,
+        UpdateOwnedCarUseCase,
+        DeleteOwnedCarUseCase,
+        GetSnapshotOwnedCarUseCase,
+        GetSnapshotsOwnedCarUseCase {
 
     private static final int MAX_OWNED_CARS = 10;
 
     private final OwnedCarPort ownedCarPort;
-    private final CarModelUseCase carModelUseCase;
-    private final MemberUseCase memberUseCase;
+    private final GetSpecByTrimCarModelUseCase getSpecByTrimCarModelUseCase;
+    private final ValidateModelYearCarModelUseCase validateModelYearCarModelUseCase;
+    private final GetByIdMemberUseCase getByIdMemberUseCase;
     private final OwnedCarPostCounter ownedCarPostCounter;
 
     // 지금 타는 차를 먼저, 그다음 이전 차량. 각각 등록순
@@ -47,7 +59,7 @@ public class OwnedCarService implements OwnedCarUseCase {
                 .sorted((a, b) -> a.getStatus().compareTo(b.getStatus()))
                 .map(car -> OwnedCarResponse.Item.of(
                         car,
-                        carModelUseCase.getSpecByTrim(car.getCarTrimId()),
+                        getSpecByTrimCarModelUseCase.getSpecByTrim(car.getCarTrimId()),
                         postCounts.getOrDefault(car.getId(), 0L)
                 ))
                 .toList()
@@ -58,13 +70,13 @@ public class OwnedCarService implements OwnedCarUseCase {
     @Override
     @Transactional
     public OwnedCarResponse create(Long memberId, OwnedCarCreateRequest request) {
-        memberUseCase.getById(memberId);
+        getByIdMemberUseCase.getById(memberId);
         // 게시물이 있어 지우지 못하고 이전 차량(PAST)으로 남은 차는 세지 않는다
         if (ownedCarPort.countByMemberIdAndStatus(memberId, OwnedCarStatus.OWNED) >= MAX_OWNED_CARS) {
             throw new CustomException(OwnedCarStatusCode.OWNED_CAR_LIMIT_EXCEEDED);
         }
-        CarSpec spec = carModelUseCase.getSpecByTrim(request.trimId());
-        carModelUseCase.validateModelYear(spec.generationId(), request.year());
+        CarSpec spec = getSpecByTrimCarModelUseCase.getSpecByTrim(request.trimId());
+        validateModelYearCarModelUseCase.validateModelYear(spec.generationId(), request.year());
         OwnedCar car = ownedCarPort.save(OwnedCar.of(
                 memberId,
                 spec,
@@ -80,7 +92,7 @@ public class OwnedCarService implements OwnedCarUseCase {
     public void update(Long memberId, Long ownedCarId, OwnedCarUpdateRequest request) {
         OwnedCar car = getOwnedCar(memberId, ownedCarId);
         if (request.year() != null) {
-            carModelUseCase.validateModelYear(car.getCarGenerationId(), request.year());
+            validateModelYearCarModelUseCase.validateModelYear(car.getCarGenerationId(), request.year());
             car.changeModelYear(request.year());
         }
         if (request.buildStyle() != null) {
@@ -134,6 +146,10 @@ public class OwnedCarService implements OwnedCarUseCase {
     }
 
     private OwnedCarSnapshot toSnapshot(OwnedCar car) {
-        return new OwnedCarSnapshot(car.getId(), carModelUseCase.getSpecByTrim(car.getCarTrimId()), car.getModelYear());
+        return new OwnedCarSnapshot(
+                car.getId(),
+                getSpecByTrimCarModelUseCase.getSpecByTrim(car.getCarTrimId()),
+                car.getModelYear()
+        );
     }
 }

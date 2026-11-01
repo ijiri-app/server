@@ -1,12 +1,24 @@
 package ijiri.ijiriserver.domain.member.application.service;
 
-import ijiri.ijiriserver.domain.auth.oauth.application.port.in.OAuthUseCase;
 import ijiri.ijiriserver.domain.member.application.data.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.application.data.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.application.data.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.application.data.request.MemberUpdateRequest;
 import ijiri.ijiriserver.domain.member.application.data.response.MemberResponse;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.ChangePasswordMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindActiveMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindEmailMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindPurgeTargetIdsMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetActiveMembersUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMeMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetProfileMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.PurgeMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.RegisterIfAbsentMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.SignupMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.SuspendMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.UpdateProfileMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.WithdrawMemberUseCase;
 import ijiri.ijiriserver.domain.member.application.port.out.MemberPort;
 import ijiri.ijiriserver.domain.member.application.port.out.MemberPostCounter;
 import ijiri.ijiriserver.domain.member.application.port.out.MemberWishCounter;
@@ -39,7 +51,20 @@ import java.util.concurrent.ThreadLocalRandom;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class MemberService implements MemberUseCase, AdminVerifier {
+public class MemberService implements GetMeMemberUseCase,
+        GetProfileMemberUseCase,
+        GetByIdMemberUseCase,
+        FindActiveMemberUseCase,
+        GetActiveMembersUseCase,
+        UpdateProfileMemberUseCase,
+        RegisterIfAbsentMemberUseCase,
+        SignupMemberUseCase,
+        FindEmailMemberUseCase,
+        ChangePasswordMemberUseCase,
+        WithdrawMemberUseCase,
+        SuspendMemberUseCase,
+        FindPurgeTargetIdsMemberUseCase,
+        PurgeMemberUseCase, AdminVerifier {
 
     private static final String DEFAULT_NICKNAME_PREFIX = "이지리오너";
     private static final int MAX_NICKNAME_TRIES = 10;

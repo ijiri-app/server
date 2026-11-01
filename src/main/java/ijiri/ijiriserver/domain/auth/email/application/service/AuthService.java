@@ -5,12 +5,21 @@ import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.PasswordResetRequest;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.SignupRequest;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.AuthUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.EmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.token.application.port.in.TokenUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeResetCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeSignupTokenEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ResetPasswordAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignInAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignOutAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignOutByRefreshTokenAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignupAuthUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.IssueTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutByRefreshTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutTokenUseCase;
 import ijiri.ijiriserver.domain.member.application.data.MemberSignupCommand;
 import ijiri.ijiriserver.domain.member.application.data.response.MemberResponse;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.ChangePasswordMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindEmailMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.SignupMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -27,7 +36,11 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class AuthService implements AuthUseCase {
+public class AuthService implements SignupAuthUseCase,
+        SignInAuthUseCase,
+        SignOutAuthUseCase,
+        SignOutByRefreshTokenAuthUseCase,
+        ResetPasswordAuthUseCase {
 
     // 없는 이메일로 로그인해도 BCrypt 비교를 한 번 수행해 응답 시간으로 가입 여부가 드러나지 않게 한다
     private static final String DUMMY_PASSWORD_HASH = "$2a$10$ADUVieyM54fCzHFbn9mvoumLLcttlgqVdwaYJu9QihGyTw570u1..";
@@ -36,9 +49,14 @@ public class AuthService implements AuthUseCase {
     private static final int MAX_SIGNIN_FAILURES = 5;
     private static final Duration SIGNIN_LOCK_PERIOD = Duration.ofMinutes(15);
 
-    private final MemberUseCase memberUseCase;
-    private final EmailVerificationUseCase emailVerificationUseCase;
-    private final TokenUseCase tokenUseCase;
+    private final ChangePasswordMemberUseCase changePasswordMemberUseCase;
+    private final FindEmailMemberUseCase findEmailMemberUseCase;
+    private final SignupMemberUseCase signupMemberUseCase;
+    private final ConsumeResetCodeEmailVerificationUseCase consumeResetCodeEmailVerificationUseCase;
+    private final ConsumeSignupTokenEmailVerificationUseCase consumeSignupTokenEmailVerificationUseCase;
+    private final IssueTokenUseCase issueTokenUseCase;
+    private final SignOutTokenUseCase signOutTokenUseCase;
+    private final SignOutByRefreshTokenUseCase signOutByRefreshTokenUseCase;
     private final PasswordEncoder passwordEncoder;
     private final RateLimiter rateLimiter;
     private final TransactionTemplate transactionTemplate;
@@ -48,13 +66,13 @@ public class AuthService implements AuthUseCase {
     @Override
     @Transactional
     public AuthResponse signup(SignupRequest request) {
-        emailVerificationUseCase.consumeSignupToken(request.email(), request.verificationToken());
-        Member member = memberUseCase.signup(new MemberSignupCommand(
+        consumeSignupTokenEmailVerificationUseCase.consumeSignupToken(request.email(), request.verificationToken());
+        Member member = signupMemberUseCase.signup(new MemberSignupCommand(
                 request.email(),
                 request.nickname(),
                 passwordEncoder.encode(request.password())
         ));
-        return tokenUseCase.issue(member).withSignIn(true, MemberResponse.summary(member));
+        return issueTokenUseCase.issue(member).withSignIn(true, MemberResponse.summary(member));
     }
 
     // 이메일 존재 여부를 노출하지 않도록 "없는 이메일"과 "틀린 비밀번호"를 같은 에러로 응답하고,
@@ -69,7 +87,7 @@ public class AuthService implements AuthUseCase {
             );
         }
 
-        Optional<Member> found = memberUseCase.findEmailMember(request.email());
+        Optional<Member> found = findEmailMemberUseCase.findEmailMember(request.email());
         String passwordHash = found.map(Member::getPassword).orElse(DUMMY_PASSWORD_HASH);
         boolean matches = passwordEncoder.matches(request.password(), passwordHash);
         if (found.isEmpty() || !matches) {
@@ -82,28 +100,28 @@ public class AuthService implements AuthUseCase {
         if (member.isWithdrawn()) {
             throw new CustomException(MemberStatusCode.MEMBER_WITHDRAWN);
         }
-        return tokenUseCase.issue(member).withSignIn(false, MemberResponse.summary(member));
+        return issueTokenUseCase.issue(member).withSignIn(false, MemberResponse.summary(member));
     }
 
     // 모든 기기에서 로그아웃. 세션(refresh token)이 지워지므로 access token 도 즉시 거부된다
     @Override
     public void signOut(Long memberId) {
-        tokenUseCase.signOut(memberId);
+        signOutTokenUseCase.signOut(memberId);
     }
 
     @Override
     public void signOutByRefreshToken(String refreshToken) {
-        tokenUseCase.signOutByRefreshToken(refreshToken);
+        signOutByRefreshTokenUseCase.signOutByRefreshToken(refreshToken);
     }
 
     // 코드 확인은 틀린 시도 횟수가 남도록 자기 트랜잭션에서 하고, 맞으면 비밀번호 변경과 세션 폐기를 한 트랜잭션으로 묶는다.
     // 비밀번호를 잊어 잠긴 계정도 재설정 후 바로 로그인할 수 있도록 실패 횟수를 지운다
     @Override
     public void resetPassword(PasswordResetRequest request) {
-        emailVerificationUseCase.consumeResetCode(request.email(), request.code());
+        consumeResetCodeEmailVerificationUseCase.consumeResetCode(request.email(), request.code());
         String encoded = passwordEncoder.encode(request.newPassword());
-        transactionTemplate.executeWithoutResult(status -> tokenUseCase.signOut(
-                memberUseCase.changePassword(request.email(), encoded)
+        transactionTemplate.executeWithoutResult(status -> signOutTokenUseCase.signOut(
+                changePasswordMemberUseCase.changePassword(request.email(), encoded)
         ));
         rateLimiter.reset(SIGNIN_FAILURE_KEY_PREFIX + request.email());
     }

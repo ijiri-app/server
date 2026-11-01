@@ -2,7 +2,8 @@ package ijiri.ijiriserver.domain.report.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.report.application.data.request.ReportProcessRequest;
 import ijiri.ijiriserver.domain.report.application.data.response.ReportResponse;
-import ijiri.ijiriserver.domain.report.application.port.in.ReportUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.GetReportsUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.ProcessReportUseCase;
 import ijiri.ijiriserver.domain.report.entity.ReportStatus;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -32,7 +33,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AdminReportController {
 
-    private final ReportUseCase reportUseCase;
+    private final GetReportsUseCase getReportsUseCase;
+    private final ProcessReportUseCase processReportUseCase;
 
     @Operation(
             summary = "신고 목록",
@@ -45,7 +47,7 @@ public class AdminReportController {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size
     ) {
-        return BaseResponse.ok(reportUseCase.getReports(status, cursor, size));
+        return BaseResponse.ok(getReportsUseCase.getReports(status, cursor, size));
     }
 
     @Operation(
@@ -60,6 +62,6 @@ public class AdminReportController {
             @PathVariable Long reportId,
             @Valid @RequestBody ReportProcessRequest request
     ) {
-        reportUseCase.process(Long.valueOf(adminId), reportId, request);
+        processReportUseCase.process(Long.valueOf(adminId), reportId, request);
     }
 }

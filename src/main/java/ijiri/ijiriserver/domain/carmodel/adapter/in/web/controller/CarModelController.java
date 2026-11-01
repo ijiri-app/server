@@ -1,7 +1,8 @@
 package ijiri.ijiriserver.domain.carmodel.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.carmodel.application.data.response.CarModelResponse;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.CarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelsUseCase;
 import ijiri.ijiriserver.domain.carmodel.entity.CarModel;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -22,7 +23,8 @@ import org.springframework.web.bind.annotation.RestController;
 @SecurityRequirements
 public class CarModelController {
 
-    private final CarModelUseCase carModelUseCase;
+    private final GetCarModelUseCase getCarModelUseCase;
+    private final GetCarModelsUseCase getCarModelsUseCase;
 
     @Operation(
             summary = "차종(모델) 목록",
@@ -34,7 +36,7 @@ public class CarModelController {
             @RequestParam(required = false) @Size(max = 50) String q,
             @RequestParam(defaultValue = "false") boolean core
     ) {
-        return BaseResponse.ok(carModelUseCase.getCarModels(q, core));
+        return BaseResponse.ok(getCarModelsUseCase.getCarModels(q, core));
     }
 
     @Operation(
@@ -43,6 +45,6 @@ public class CarModelController {
     )
     @GetMapping("/{carModelId}")
     public BaseResponse<CarModelResponse> getCarModel(@PathVariable Long carModelId) {
-        return BaseResponse.ok(carModelUseCase.getCarModel(carModelId));
+        return BaseResponse.ok(getCarModelUseCase.getCarModel(carModelId));
     }
 }

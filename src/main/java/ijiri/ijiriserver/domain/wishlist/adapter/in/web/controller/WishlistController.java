@@ -3,7 +3,9 @@ package ijiri.ijiriserver.domain.wishlist.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.wishlist.application.data.WishlistAddResult;
 import ijiri.ijiriserver.domain.wishlist.application.data.request.WishlistAddRequest;
 import ijiri.ijiriserver.domain.wishlist.application.data.response.WishlistResponse;
-import ijiri.ijiriserver.domain.wishlist.application.port.in.WishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.AddWishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.GetWishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.RemoveWishlistUseCase;
 import ijiri.ijiriserver.domain.wishlist.exception.WishlistStatusCode;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,7 +32,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class WishlistController {
 
-    private final WishlistUseCase wishlistUseCase;
+    private final AddWishlistUseCase addWishlistUseCase;
+    private final GetWishlistUseCase getWishlistUseCase;
+    private final RemoveWishlistUseCase removeWishlistUseCase;
 
     @Operation(
             summary = "부품 담기",
@@ -42,7 +46,7 @@ public class WishlistController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody WishlistAddRequest request
     ) {
-        WishlistAddResult result = wishlistUseCase.add(Long.valueOf(memberId), request.postPartId());
+        WishlistAddResult result = addWishlistUseCase.add(Long.valueOf(memberId), request.postPartId());
         WishlistStatusCode statusCode = result.created()
                 ? WishlistStatusCode.ADD_SUCCESS
                 : WishlistStatusCode.ALREADY_ADDED;
@@ -60,7 +64,7 @@ public class WishlistController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long wishlistItemId
     ) {
-        wishlistUseCase.remove(Long.valueOf(memberId), wishlistItemId);
+        removeWishlistUseCase.remove(Long.valueOf(memberId), wishlistItemId);
     }
 
     @Operation(
@@ -73,6 +77,6 @@ public class WishlistController {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(wishlistUseCase.getWishlist(Long.valueOf(memberId), cursor, size));
+        return BaseResponse.ok(getWishlistUseCase.getWishlist(Long.valueOf(memberId), cursor, size));
     }
 }

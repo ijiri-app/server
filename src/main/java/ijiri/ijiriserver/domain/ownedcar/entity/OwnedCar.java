@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.ownedcar.entity;
 
-import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
+import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

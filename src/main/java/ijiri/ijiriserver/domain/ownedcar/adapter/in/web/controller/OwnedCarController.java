@@ -3,7 +3,10 @@ package ijiri.ijiriserver.domain.ownedcar.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.ownedcar.application.data.request.OwnedCarCreateRequest;
 import ijiri.ijiriserver.domain.ownedcar.application.data.request.OwnedCarUpdateRequest;
 import ijiri.ijiriserver.domain.ownedcar.application.data.response.OwnedCarResponse;
-import ijiri.ijiriserver.domain.ownedcar.application.port.in.OwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.CreateOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.DeleteOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetAllOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.UpdateOwnedCarUseCase;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
 import ijiri.ijiriserver.domain.ownedcar.exception.OwnedCarStatusCode;
 import ijiri.ijiriserver.global.data.BaseResponse;
@@ -30,7 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OwnedCarController {
 
-    private final OwnedCarUseCase ownedCarUseCase;
+    private final CreateOwnedCarUseCase createOwnedCarUseCase;
+    private final DeleteOwnedCarUseCase deleteOwnedCarUseCase;
+    private final GetAllOwnedCarUseCase getAllOwnedCarUseCase;
+    private final UpdateOwnedCarUseCase updateOwnedCarUseCase;
 
     @Operation(
             summary = "보유 차량 목록",
@@ -40,7 +46,7 @@ public class OwnedCarController {
     public BaseResponse<OwnedCarResponse> getAll(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(ownedCarUseCase.getAll(Long.valueOf(memberId)));
+        return BaseResponse.ok(getAllOwnedCarUseCase.getAll(Long.valueOf(memberId)));
     }
 
     @Operation(
@@ -55,7 +61,7 @@ public class OwnedCarController {
     ) {
         return BaseResponse.of(
                 OwnedCarStatusCode.CREATE_SUCCESS,
-                ownedCarUseCase.create(Long.valueOf(memberId), request)
+                createOwnedCarUseCase.create(Long.valueOf(memberId), request)
         );
     }
 
@@ -70,7 +76,7 @@ public class OwnedCarController {
             @PathVariable Long ownedCarId,
             @Valid @RequestBody OwnedCarUpdateRequest request
     ) {
-        ownedCarUseCase.update(Long.valueOf(memberId), ownedCarId, request);
+        updateOwnedCarUseCase.update(Long.valueOf(memberId), ownedCarId, request);
     }
 
     @Operation(
@@ -83,6 +89,6 @@ public class OwnedCarController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @PathVariable Long ownedCarId
     ) {
-        ownedCarUseCase.delete(Long.valueOf(memberId), ownedCarId);
+        deleteOwnedCarUseCase.delete(Long.valueOf(memberId), ownedCarId);
     }
 }

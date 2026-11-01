@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.global.handler;
 
+import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import ijiri.ijiriserver.global.exception.status_code.CommonStatusCode;
 import ijiri.ijiriserver.global.exception.status_code.StatusCode;
-import ijiri.ijiriserver.global.data.BaseResponse;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.MessageSourceResolvable;

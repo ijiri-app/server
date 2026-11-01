@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.domain.upload.adapter.out.external;
 
 import ijiri.ijiriserver.domain.upload.application.data.StoredObject;
+import ijiri.ijiriserver.domain.upload.application.port.out.DbImageStoragePort;
 import ijiri.ijiriserver.domain.upload.application.port.out.ImageFilePort;
 import ijiri.ijiriserver.domain.upload.application.port.out.ImageStorageClient;
-import ijiri.ijiriserver.domain.upload.application.port.out.DbImageStoragePort;
 import ijiri.ijiriserver.domain.upload.entity.ImageFile;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

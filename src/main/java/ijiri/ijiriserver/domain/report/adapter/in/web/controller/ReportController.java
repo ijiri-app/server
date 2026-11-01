@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.report.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.report.application.data.request.ReportCreateRequest;
-import ijiri.ijiriserver.domain.report.application.port.in.ReportUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.CreateReportUseCase;
 import ijiri.ijiriserver.domain.report.entity.Report;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ReportController {
 
-    private final ReportUseCase reportUseCase;
+    private final CreateReportUseCase createReportUseCase;
 
     @Operation(
             summary = "게시물·사용자 신고",
@@ -35,6 +35,6 @@ public class ReportController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody ReportCreateRequest request
     ) {
-        reportUseCase.report(Long.valueOf(memberId), request);
+        createReportUseCase.report(Long.valueOf(memberId), request);
     }
 }

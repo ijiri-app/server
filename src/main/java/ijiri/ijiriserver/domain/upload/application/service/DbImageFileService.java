@@ -1,8 +1,9 @@
 package ijiri.ijiriserver.domain.upload.application.service;
 
-import ijiri.ijiriserver.domain.upload.application.port.out.DbImageStoragePort;
 import ijiri.ijiriserver.domain.upload.application.data.ImageFileContent;
-import ijiri.ijiriserver.domain.upload.application.port.in.DbImageFileUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.LoadDbImageFileUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.ReceiveDbImageFileUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.out.DbImageStoragePort;
 import ijiri.ijiriserver.domain.upload.application.port.out.UploadedImagePort;
 import ijiri.ijiriserver.domain.upload.entity.UploadStatus;
 import ijiri.ijiriserver.domain.upload.entity.UploadedImage;
@@ -16,7 +17,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 @ConditionalOnProperty(name = "storage.type", havingValue = "db", matchIfMissing = true)
-public class DbImageFileService implements DbImageFileUseCase {
+public class DbImageFileService implements ReceiveDbImageFileUseCase,
+        LoadDbImageFileUseCase {
 
     private final UploadedImagePort uploadedImagePort;
     private final DbImageStoragePort dbImageStoragePort;

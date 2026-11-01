@@ -2,7 +2,8 @@ package ijiri.ijiriserver.domain.interestcar.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.interestcar.application.data.request.InterestCarUpdateRequest;
 import ijiri.ijiriserver.domain.interestcar.application.data.response.InterestCarResponse;
-import ijiri.ijiriserver.domain.interestcar.application.port.in.InterestCarUseCase;
+import ijiri.ijiriserver.domain.interestcar.application.port.in.GetAllInterestCarUseCase;
+import ijiri.ijiriserver.domain.interestcar.application.port.in.ReplaceAllInterestCarUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,7 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class InterestCarController {
 
-    private final InterestCarUseCase interestCarUseCase;
+    private final GetAllInterestCarUseCase getAllInterestCarUseCase;
+    private final ReplaceAllInterestCarUseCase replaceAllInterestCarUseCase;
 
     @Operation(
             summary = "관심 차종 조회",
@@ -34,7 +36,7 @@ public class InterestCarController {
     public BaseResponse<InterestCarResponse> getAll(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(interestCarUseCase.getAll(Long.valueOf(memberId)));
+        return BaseResponse.ok(getAllInterestCarUseCase.getAll(Long.valueOf(memberId)));
     }
 
     @Operation(
@@ -48,6 +50,6 @@ public class InterestCarController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody InterestCarUpdateRequest request
     ) {
-        interestCarUseCase.replaceAll(Long.valueOf(memberId), request.carModelIds());
+        replaceAllInterestCarUseCase.replaceAll(Long.valueOf(memberId), request.carModelIds());
     }
 }

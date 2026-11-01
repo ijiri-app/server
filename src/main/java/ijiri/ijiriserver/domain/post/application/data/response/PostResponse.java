@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.domain.post.application.data.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
+import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.part.application.data.PartInfo;
 import ijiri.ijiriserver.domain.part.entity.Part;

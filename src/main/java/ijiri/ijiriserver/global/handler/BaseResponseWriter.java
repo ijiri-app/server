@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.global.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import ijiri.ijiriserver.global.exception.status_code.StatusCode;
 import ijiri.ijiriserver.global.data.BaseResponse;
+import ijiri.ijiriserver.global.exception.status_code.StatusCode;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;

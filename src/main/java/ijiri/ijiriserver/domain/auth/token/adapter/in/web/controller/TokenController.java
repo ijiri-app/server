@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.auth.token.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.application.data.request.RefreshTokenRequest;
-import ijiri.ijiriserver.domain.auth.token.application.port.in.TokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.RefreshTokenUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TokenController {
 
-    private final TokenUseCase tokenUseCase;
+    private final RefreshTokenUseCase refreshTokenUseCase;
     private final JwtCookieManager jwtCookieManager;
 
     @Operation(
@@ -43,7 +43,7 @@ public class TokenController {
         String refreshToken = jwtCookieManager.resolveRefreshToken(httpRequest, bodyToken)
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
 
-        AuthResponse tokens = tokenUseCase.refresh(refreshToken);
+        AuthResponse tokens = refreshTokenUseCase.refresh(refreshToken);
         jwtCookieManager.addTokenCookies(httpResponse, tokens.accessToken(), tokens.refreshToken());
         return BaseResponse.of(AuthStatusCode.REFRESH_SUCCESS, tokens);
     }

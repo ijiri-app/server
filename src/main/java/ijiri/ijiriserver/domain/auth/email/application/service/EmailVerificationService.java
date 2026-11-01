@@ -2,13 +2,17 @@ package ijiri.ijiriserver.domain.auth.email.application.service;
 
 import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.email.application.port.out.VerificationMailPort;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.EmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeResetCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeSignupTokenEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendResetCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendSignupCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.VerifySignupCodeEmailVerificationUseCase;
 import ijiri.ijiriserver.domain.auth.email.application.port.out.EmailVerificationPort;
+import ijiri.ijiriserver.domain.auth.email.application.port.out.VerificationMailPort;
 import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
 import ijiri.ijiriserver.domain.auth.email.entity.VerificationPurpose;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindEmailMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
@@ -28,7 +32,11 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class EmailVerificationService implements EmailVerificationUseCase {
+public class EmailVerificationService implements SendSignupCodeEmailVerificationUseCase,
+        VerifySignupCodeEmailVerificationUseCase,
+        ConsumeSignupTokenEmailVerificationUseCase,
+        SendResetCodeEmailVerificationUseCase,
+        ConsumeResetCodeEmailVerificationUseCase {
 
     private static final long CODE_VALID_MINUTES = 5;
     // 가입 코드 확인 후 가입까지 허용하는 시간 = verificationToken 유효 시간
@@ -47,7 +55,7 @@ public class EmailVerificationService implements EmailVerificationUseCase {
 
     private final EmailVerificationPort emailVerificationPort;
     private final VerificationMailPort verificationMailPort;
-    private final MemberUseCase memberUseCase;
+    private final FindEmailMemberUseCase findEmailMemberUseCase;
     private final RateLimiter rateLimiter;
     private final Clock clock;
     private final TransactionTemplate transactionTemplate;
@@ -55,7 +63,7 @@ public class EmailVerificationService implements EmailVerificationUseCase {
     // 가입된 이메일도 응답(성공/재발송 대기)은 미가입 이메일과 똑같이 두고 안내 메일만 보내 가입 여부가 드러나지 않게 한다
     @Override
     public void sendSignupCode(String email) {
-        Optional<Member> registered = memberUseCase.findEmailMember(email);
+        Optional<Member> registered = findEmailMemberUseCase.findEmailMember(email);
         if (registered.isPresent()) {
             acquireNoticeCooldown(email, VerificationPurpose.SIGNUP);
             if (registered.get().isWithdrawn()) {
@@ -96,7 +104,7 @@ public class EmailVerificationService implements EmailVerificationUseCase {
     // 가입 여부가 드러나지 않도록 활성 이메일 회원이 아니어도 같은 응답(재발송 대기 포함)을 주고 메일만 보내지 않는다
     @Override
     public void sendResetCode(String email) {
-        if (memberUseCase.findEmailMember(email).filter(member -> !member.isWithdrawn()).isEmpty()) {
+        if (findEmailMemberUseCase.findEmailMember(email).filter(member -> !member.isWithdrawn()).isEmpty()) {
             acquireNoticeCooldown(email, VerificationPurpose.RESET_PASSWORD);
             return;
         }

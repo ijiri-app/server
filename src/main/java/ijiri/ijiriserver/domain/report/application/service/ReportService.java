@@ -1,13 +1,17 @@
 package ijiri.ijiriserver.domain.report.application.service;
 
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.SuspendMemberUseCase;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
-import ijiri.ijiriserver.domain.post.application.port.in.PostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetAuthorIdPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.HidePostUseCase;
 import ijiri.ijiriserver.domain.report.application.data.ReportSummary;
 import ijiri.ijiriserver.domain.report.application.data.request.ReportCreateRequest;
 import ijiri.ijiriserver.domain.report.application.data.request.ReportProcessRequest;
 import ijiri.ijiriserver.domain.report.application.data.response.ReportResponse;
-import ijiri.ijiriserver.domain.report.application.port.in.ReportUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.CreateReportUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.GetReportsUseCase;
+import ijiri.ijiriserver.domain.report.application.port.in.ProcessReportUseCase;
 import ijiri.ijiriserver.domain.report.application.port.out.ReportPort;
 import ijiri.ijiriserver.domain.report.entity.Report;
 import ijiri.ijiriserver.domain.report.entity.ReportAction;
@@ -31,19 +35,23 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class ReportService implements ReportUseCase {
+public class ReportService implements CreateReportUseCase,
+        GetReportsUseCase,
+        ProcessReportUseCase {
 
     private static final int DEFAULT_SUSPEND_DAYS = 7;
 
     private final ReportPort reportPort;
-    private final PostUseCase postUseCase;
-    private final MemberUseCase memberUseCase;
+    private final GetAuthorIdPostUseCase getAuthorIdPostUseCase;
+    private final HidePostUseCase hidePostUseCase;
+    private final GetByIdMemberUseCase getByIdMemberUseCase;
+    private final SuspendMemberUseCase suspendMemberUseCase;
     private final Clock clock;
 
     @Override
     @Transactional
     public void report(Long reporterId, ReportCreateRequest request) {
-        memberUseCase.getById(reporterId);
+        getByIdMemberUseCase.getById(reporterId);
         Long targetMemberId = resolveTargetMemberId(request.targetType(), request.targetId());
         if (targetMemberId.equals(reporterId)) {
             throw new CustomException(ReportStatusCode.CANNOT_REPORT_SELF);
@@ -112,11 +120,11 @@ public class ReportService implements ReportUseCase {
                 if (report.getTargetType() != ReportTargetType.POST) {
                     throw new CustomException(ReportStatusCode.INVALID_ACTION);
                 }
-                postUseCase.hide(report.getTargetId());
+                hidePostUseCase.hide(report.getTargetId());
             }
             case SUSPEND_MEMBER -> {
                 int days = request.suspendDays() != null ? request.suspendDays() : DEFAULT_SUSPEND_DAYS;
-                memberUseCase.suspend(report.getTargetMemberId(), now.plusDays(days));
+                suspendMemberUseCase.suspend(report.getTargetMemberId(), now.plusDays(days));
             }
             case DISMISS -> {
                 // 조치 없이 신고만 닫는다
@@ -142,8 +150,8 @@ public class ReportService implements ReportUseCase {
 
     private Long resolveTargetMemberId(ReportTargetType targetType, Long targetId) {
         return switch (targetType) {
-            case POST -> postUseCase.getAuthorId(targetId);
-            case MEMBER -> memberUseCase.getById(targetId).getId();
+            case POST -> getAuthorIdPostUseCase.getAuthorId(targetId);
+            case MEMBER -> getByIdMemberUseCase.getById(targetId).getId();
         };
     }
 }

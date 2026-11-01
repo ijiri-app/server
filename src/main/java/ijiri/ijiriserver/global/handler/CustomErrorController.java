@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.global.handler;
 
+import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.exception.status_code.CommonStatusCode;
 import ijiri.ijiriserver.global.exception.status_code.StatusCode;
-import ijiri.ijiriserver.global.data.BaseResponse;
 import jakarta.servlet.RequestDispatcher;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.web.servlet.error.ErrorController;

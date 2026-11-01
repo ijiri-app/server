@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.upload.adapter.in.scheduler;
 
-import ijiri.ijiriserver.domain.upload.application.port.in.UploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUnattachedUploadUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -14,11 +14,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class UploadedImageCleanupScheduler {
 
-    private final UploadUseCase uploadUseCase;
+    private final DeleteUnattachedUploadUseCase deleteUnattachedUploadUseCase;
 
     @Scheduled(fixedDelay = 300_000)
     public void deleteUnattached() {
-        int deleted = uploadUseCase.deleteUnattached();
+        int deleted = deleteUnattachedUploadUseCase.deleteUnattached();
         if (deleted > 0) {
             log.info("Deleted {} unattached uploaded images", deleted);
         }

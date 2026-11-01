@@ -1,14 +1,20 @@
 package ijiri.ijiriserver.domain.carmodel.application.service;
 
 import ijiri.ijiriserver.domain.carmodel.application.data.CarModelInfo;
-import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.application.data.response.CarModelResponse;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.CarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelInfosUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelsUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetModelNamesCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetSpecByTrimCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateCarModelsExistUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateModelYearCarModelUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarGenerationPort;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarModelPort;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarTrimPort;
 import ijiri.ijiriserver.domain.carmodel.entity.CarGeneration;
 import ijiri.ijiriserver.domain.carmodel.entity.CarModel;
+import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.entity.CarTrim;
 import ijiri.ijiriserver.domain.carmodel.exception.CarModelStatusCode;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -41,7 +47,13 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class CarModelService implements CarModelUseCase {
+public class CarModelService implements GetCarModelsUseCase,
+        GetCarModelUseCase,
+        ValidateCarModelsExistUseCase,
+        GetSpecByTrimCarModelUseCase,
+        ValidateModelYearCarModelUseCase,
+        GetCarModelInfosUseCase,
+        GetModelNamesCarModelUseCase {
 
     private static final String MASTER_CSV = "car-master/car_master.csv";
     // brand,model,is_core,generation_code,start_year,end_year,trim

@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.domain.ownedcar.application.data.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
+import ijiri.ijiriserver.domain.carmodel.entity.CarSpec;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarStatus;
 

@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.auth.token.application.service;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.application.port.out.RefreshTokenPort;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindActiveMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Role;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -33,15 +33,15 @@ class TokenServiceTest {
     private static final String SECRET = "test-secret-key-0123456789abcdef-0123456789";
 
     private final RefreshTokenPort refreshTokenPort = mock(RefreshTokenPort.class);
-    private final MemberUseCase memberUseCase = mock(MemberUseCase.class);
+    private final FindActiveMemberUseCase findActiveMemberUseCase = mock(FindActiveMemberUseCase.class);
     private final JwtProvider jwtProvider = new JwtProvider(SECRET, 3600, 2419200);
-    private TokenService tokenUseCase;
+    private TokenService tokenService;
 
     @BeforeEach
     void setUp() {
-        tokenUseCase = new TokenService(
+        tokenService = new TokenService(
                 refreshTokenPort,
-                memberUseCase,
+                findActiveMemberUseCase,
                 jwtProvider,
                 Clock.fixed(Instant.now(), ZoneOffset.UTC)
         );
@@ -49,7 +49,7 @@ class TokenServiceTest {
 
     @Test
     void 발급하면_기존_토큰을_모두_지우고_새_토큰_하나만_저장한다() {
-        tokenUseCase.issue(Member.builder().id(7L).role(Role.USER).build());
+        tokenService.issue(Member.builder().id(7L).role(Role.USER).build());
 
         InOrder order = inOrder(refreshTokenPort);
         order.verify(refreshTokenPort).deleteAllByMemberId(7L);
@@ -61,26 +61,26 @@ class TokenServiceTest {
         String replacedToken = jwtProvider.createRefreshToken("7", "session-1");
         when(refreshTokenPort.deleteValidByTokenHash(anyString(), any())).thenReturn(0);
 
-        assertThatThrownBy(() -> tokenUseCase.refresh(replacedToken)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> tokenService.refresh(replacedToken)).isInstanceOf(CustomException.class);
         verify(refreshTokenPort, never()).deleteAllByMemberId(any());
-        verify(memberUseCase, never()).findActiveMember(any());
+        verify(findActiveMemberUseCase, never()).findActiveMember(any());
     }
 
     @Test
     void 세션의_refresh_token_이_남아_있어야_access_token_이_유효하다() {
         when(refreshTokenPort.existsBySessionIdAndExpiresAtAfter(eq("session-1"), any())).thenReturn(true);
 
-        assertThat(tokenUseCase.isActive("session-1")).isTrue();
-        assertThat(tokenUseCase.isActive("deleted-session")).isFalse();
+        assertThat(tokenService.isActive("session-1")).isTrue();
+        assertThat(tokenService.isActive("deleted-session")).isFalse();
     }
 
     @Test
     void 탈퇴한_회원의_refresh_token_은_404_가_아닌_유효하지_않은_토큰으로_거부한다() {
         String refreshToken = jwtProvider.createRefreshToken("7", "session-1");
         when(refreshTokenPort.deleteValidByTokenHash(anyString(), any())).thenReturn(1);
-        when(memberUseCase.findActiveMember(7L)).thenReturn(Optional.empty());
+        when(findActiveMemberUseCase.findActiveMember(7L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> tokenUseCase.refresh(refreshToken))
+        assertThatThrownBy(() -> tokenService.refresh(refreshToken))
                 .isInstanceOfSatisfying(CustomException.class, e ->
                         assertThat(e.getStatusCode()).isEqualTo(AuthStatusCode.INVALID_REFRESH_TOKEN)
                 );
@@ -88,7 +88,7 @@ class TokenServiceTest {
 
     @Test
     void 로그아웃하면_회원의_refresh_token_을_모두_지운다() {
-        tokenUseCase.signOut(7L);
+        tokenService.signOut(7L);
 
         verify(refreshTokenPort).deleteAllByMemberId(7L);
     }
@@ -97,7 +97,7 @@ class TokenServiceTest {
     void access_token_으로는_갱신할_수_없다() {
         String accessToken = jwtProvider.createAccessToken("7", "USER", "session-1");
 
-        assertThatThrownBy(() -> tokenUseCase.refresh(accessToken)).isInstanceOf(CustomException.class);
+        assertThatThrownBy(() -> tokenService.refresh(accessToken)).isInstanceOf(CustomException.class);
         verify(refreshTokenPort, never()).deleteValidByTokenHash(anyString(), any());
     }
 }

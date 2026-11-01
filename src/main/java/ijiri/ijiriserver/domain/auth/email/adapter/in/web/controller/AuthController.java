@@ -6,8 +6,12 @@ import ijiri.ijiriserver.domain.auth.email.application.data.request.PasswordRese
 import ijiri.ijiriserver.domain.auth.email.application.data.request.SignInRequest;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.SignupRequest;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.VerificationCodeSendRequest;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.AuthUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.EmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ResetPasswordAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendResetCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignInAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignOutAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignOutByRefreshTokenAuthUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SignupAuthUseCase;
 import ijiri.ijiriserver.domain.auth.token.application.data.request.RefreshTokenRequest;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -47,8 +51,12 @@ public class AuthController {
     private static final int SEND_LIMIT_PER_IP = 10;
     private static final Duration SEND_LIMIT_PERIOD = Duration.ofHours(1);
 
-    private final AuthUseCase authUseCase;
-    private final EmailVerificationUseCase emailVerificationUseCase;
+    private final ResetPasswordAuthUseCase resetPasswordAuthUseCase;
+    private final SignInAuthUseCase signInAuthUseCase;
+    private final SignOutAuthUseCase signOutAuthUseCase;
+    private final SignOutByRefreshTokenAuthUseCase signOutByRefreshTokenAuthUseCase;
+    private final SignupAuthUseCase signupAuthUseCase;
+    private final SendResetCodeEmailVerificationUseCase sendResetCodeEmailVerificationUseCase;
     private final JwtCookieManager jwtCookieManager;
     private final RateLimiter rateLimiter;
 
@@ -62,7 +70,7 @@ public class AuthController {
             @Valid @RequestBody SignupRequest request,
             HttpServletResponse httpResponse
     ) {
-        AuthResponse response = authUseCase.signup(request);
+        AuthResponse response = signupAuthUseCase.signup(request);
         jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
         return BaseResponse.of(AuthStatusCode.SIGNUP_SUCCESS, response);
     }
@@ -79,7 +87,7 @@ public class AuthController {
             HttpServletResponse httpResponse
     ) {
         rateLimiter.check(SIGNIN_KEY_PREFIX + httpRequest.getRemoteAddr(), SIGNIN_LIMIT_PER_IP, SIGNIN_LIMIT_PERIOD);
-        AuthResponse response = authUseCase.signIn(request);
+        AuthResponse response = signInAuthUseCase.signIn(request);
         jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, response);
     }
@@ -96,7 +104,7 @@ public class AuthController {
             HttpServletRequest httpRequest
     ) {
         rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
-        emailVerificationUseCase.sendResetCode(request.email());
+        sendResetCodeEmailVerificationUseCase.sendResetCode(request.email());
     }
 
     @Operation(
@@ -107,7 +115,7 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @PostMapping("/password/reset")
     public void resetPassword(@Valid @RequestBody PasswordResetRequest request) {
-        authUseCase.resetPassword(request);
+        resetPasswordAuthUseCase.resetPassword(request);
     }
 
     @Operation(
@@ -125,9 +133,9 @@ public class AuthController {
     ) {
         // 두 경우 모두 세션을 먼저 지운 뒤 쿠키를 만료시킨다 (삭제가 실패하면 쿠키도 그대로 둔다)
         if (memberId != null) {
-            authUseCase.signOut(Long.valueOf(memberId));
+            signOutAuthUseCase.signOut(Long.valueOf(memberId));
         } else {
-            authUseCase.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
+            signOutByRefreshTokenAuthUseCase.signOutByRefreshToken(resolveRefreshToken(request, httpRequest));
         }
         jwtCookieManager.expireTokenCookies(httpResponse);
     }

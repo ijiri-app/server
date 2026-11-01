@@ -2,7 +2,10 @@ package ijiri.ijiriserver.domain.member.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.member.application.data.request.MemberUpdateRequest;
 import ijiri.ijiriserver.domain.member.application.data.response.MemberResponse;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMeMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetProfileMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.UpdateProfileMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.WithdrawMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
 import ijiri.ijiriserver.global.data.BaseResponse;
@@ -30,7 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MemberController {
 
-    private final MemberUseCase memberUseCase;
+    private final GetMeMemberUseCase getMeMemberUseCase;
+    private final GetProfileMemberUseCase getProfileMemberUseCase;
+    private final UpdateProfileMemberUseCase updateProfileMemberUseCase;
+    private final WithdrawMemberUseCase withdrawMemberUseCase;
     private final JwtCookieManager jwtCookieManager;
 
     @Operation(
@@ -41,7 +47,7 @@ public class MemberController {
     public BaseResponse<MemberResponse> getMe(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(memberUseCase.getMe(Long.valueOf(memberId)));
+        return BaseResponse.ok(getMeMemberUseCase.getMe(Long.valueOf(memberId)));
     }
 
     @Operation(
@@ -55,7 +61,7 @@ public class MemberController {
     ) {
         return BaseResponse.of(
                 MemberStatusCode.UPDATE_SUCCESS,
-                memberUseCase.updateProfile(Long.valueOf(memberId), request)
+                updateProfileMemberUseCase.updateProfile(Long.valueOf(memberId), request)
         );
     }
 
@@ -70,7 +76,7 @@ public class MemberController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             HttpServletResponse httpResponse
     ) {
-        memberUseCase.withdraw(Long.valueOf(memberId));
+        withdrawMemberUseCase.withdraw(Long.valueOf(memberId));
         jwtCookieManager.expireTokenCookies(httpResponse);
     }
 
@@ -80,6 +86,6 @@ public class MemberController {
     )
     @GetMapping("/{memberId}")
     public BaseResponse<MemberResponse> getProfile(@PathVariable Long memberId) {
-        return BaseResponse.ok(memberUseCase.getProfile(memberId));
+        return BaseResponse.ok(getProfileMemberUseCase.getProfile(memberId));
     }
 }

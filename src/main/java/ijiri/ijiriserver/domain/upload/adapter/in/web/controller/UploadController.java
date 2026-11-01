@@ -2,7 +2,7 @@ package ijiri.ijiriserver.domain.upload.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.upload.application.data.request.UploadUrlRequest;
 import ijiri.ijiriserver.domain.upload.application.data.response.UploadResponse;
-import ijiri.ijiriserver.domain.upload.application.port.in.UploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.CreateUploadUrlsUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class UploadController {
 
-    private final UploadUseCase uploadUseCase;
+    private final CreateUploadUrlsUseCase createUploadUrlsUseCase;
 
     @Operation(
             summary = "업로드 URL 발급",
@@ -32,6 +32,6 @@ public class UploadController {
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId,
             @Valid @RequestBody UploadUrlRequest request
     ) {
-        return BaseResponse.ok(uploadUseCase.createUploadUrls(Long.valueOf(memberId), request));
+        return BaseResponse.ok(createUploadUrlsUseCase.createUploadUrls(Long.valueOf(memberId), request));
     }
 }

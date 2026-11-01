@@ -1,16 +1,19 @@
 package ijiri.ijiriserver.domain.wishlist.application.service;
 
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
 import ijiri.ijiriserver.domain.post.application.data.PostPartSummary;
 import ijiri.ijiriserver.domain.post.application.data.WishTarget;
-import ijiri.ijiriserver.domain.post.application.port.in.PostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetPostPartSummariesUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetWishTargetPostUseCase;
 import ijiri.ijiriserver.domain.post.event.PostDeletedEvent;
 import ijiri.ijiriserver.domain.post.event.PostPartsRemovedEvent;
 import ijiri.ijiriserver.domain.wishlist.application.data.WishlistAddResult;
 import ijiri.ijiriserver.domain.wishlist.application.data.response.WishlistResponse;
-import ijiri.ijiriserver.domain.wishlist.application.port.in.WishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.AddWishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.GetWishlistUseCase;
+import ijiri.ijiriserver.domain.wishlist.application.port.in.RemoveWishlistUseCase;
 import ijiri.ijiriserver.domain.wishlist.application.port.out.WishlistItemPort;
 import ijiri.ijiriserver.domain.wishlist.entity.WishlistItem;
 import ijiri.ijiriserver.domain.wishlist.exception.WishlistStatusCode;
@@ -28,18 +31,21 @@ import java.util.Map;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class WishlistService implements WishlistUseCase {
+public class WishlistService implements AddWishlistUseCase,
+        RemoveWishlistUseCase,
+        GetWishlistUseCase {
 
     private final WishlistItemPort wishlistItemPort;
-    private final PostUseCase postUseCase;
-    private final MemberUseCase memberUseCase;
+    private final GetPostPartSummariesUseCase getPostPartSummariesUseCase;
+    private final GetWishTargetPostUseCase getWishTargetPostUseCase;
+    private final GetByIdMemberUseCase getByIdMemberUseCase;
 
     // 비로그인 상태에서 담기를 누르고 로그인한 뒤 다시 보내는 흐름이 있으므로, 이미 담긴 부품이면 기존 항목을 돌려준다
     @Override
     @Transactional
     public WishlistAddResult add(Long memberId, Long postPartId) {
-        memberUseCase.getById(memberId);
-        WishTarget target = postUseCase.getWishTarget(postPartId);
+        getByIdMemberUseCase.getById(memberId);
+        WishTarget target = getWishTargetPostUseCase.getWishTarget(postPartId);
         return wishlistItemPort.findByMemberIdAndPostPartId(memberId, postPartId)
                 .map(item -> new WishlistAddResult(item.getId(), false))
                 .orElseGet(() -> new WishlistAddResult(
@@ -72,7 +78,7 @@ public class WishlistService implements WishlistUseCase {
         );
         boolean hasNext = found.size() > size;
         List<WishlistItem> page = hasNext ? found.subList(0, size) : found;
-        Map<Long, PostPartSummary> parts = postUseCase.getPostPartSummaries(
+        Map<Long, PostPartSummary> parts = getPostPartSummariesUseCase.getPostPartSummaries(
                 page.stream().map(WishlistItem::getPostPartId).toList()
         );
         return WishlistResponse.list(

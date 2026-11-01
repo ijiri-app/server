@@ -11,14 +11,13 @@ ijiri.ijiriserver
 ├── domain
 │   ├── auth
 │   │   ├── common                shared by all providers: SocialTokenVerifier, SocialUnlinkClient
-│   │   │                         (outbound ports), AuthResponse, AuthStatusCode, SocialUnlinkService
+│   │   │                         (outbound ports), kakao and google under adapter/out/external,
+│   │   │                         AuthResponse, AuthStatusCode, SocialUnlinkService
 │   │   ├── email                 POST /auth/signup, /auth/login/email, /auth/logout,
 │   │   │   │                     /auth/password/reset/code, /auth/password/reset,
 │   │   │   │                     /auth/email/send-code, /auth/email/verify-code
 │   │   │   │                     (AuthController, EmailVerificationController)
 │   │   ├── oauth                 POST /auth/login (provider + token), OAuthController
-│   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
-│   │   ├── google                client only: GoogleOAuthClient (verify)
 │   │   └── token                 POST /auth/refresh (TokenController)
 │   ├── member                    GET/PATCH/DELETE /members/me, GET /members/{id}
 │   ├── interestcar               GET/PUT /members/me/interest-cars
@@ -88,18 +87,19 @@ domain/<feature>
 ```
 
 - Dependencies point inward: `application` never imports `adapter`; `entity`, `event` and `exception` import
-  neither `application` nor `adapter`. Controllers and other domains depend on `XxxUseCase`.
+  neither `application` nor `adapter`. Controllers and other domains depend on `port/in` use cases.
 - Services use outbound ports, never `XxxJpaRepository` or a concrete client. A port declares only the
   methods in use. JPA entities double as the domain model; they are not mapped to separate classes.
-- Sub-features of a domain get their own sub-package (e.g. `auth/kakao`, `auth/token`).
+- Sub-features of a domain get their own sub-package (e.g. `auth/email`, `auth/token`).
 - `global` contains only cross-cutting infrastructure, never business logic.
 
 ## Design principles
 
 - **SRP**: external API calls in `adapter/out/external`, orchestration in `application/service`, HTTP mapping in `controller`.
-- **OCP**: add a social provider (e.g. Apple) with a new sub-package containing a `SocialTokenVerifier`
+- **OCP**: add a social provider (e.g. Apple) with a new package under
+  `auth/common/adapter/out/external` containing a `SocialTokenVerifier`
   (returns `MemberRegisterCommand`; plus `SocialUnlinkClient` if needed) and a `Provider` enum value;
-  `OAuthUseCase` picks it up automatically. Do not modify existing providers.
+  `OAuthService` picks it up automatically. Do not modify existing providers.
 - **Cross-domain cleanup** goes through member events; `member` never calls other domains' services
   (no package cycles). `MemberSuspendedEvent` revokes sessions; `MemberProfileImageChangedEvent` lets `upload`
   verify the new profile image (exception rolls the change back) and delete the previous file.
@@ -115,8 +115,8 @@ domain/<feature>
 
 ### Service layer
 
-- Default shape: one `XxxUseCase` interface + one `XxxService` per domain / feature area.
-- Do not split simple CRUD into per-method use cases (`CreatePostUseCase`, ...) or split
-  interfaces just to "apply" ISP. A controller depends on a single use case.
+- Each inbound operation has its own `port/in` interface (`GetMeMemberUseCase`, `CreatePostUseCase`), and
+  callers inject only the use cases they call.
+- One `XxxService` may implement several related use cases of a domain / feature area.
 - Introduce an abstraction only when multiple implementations exist or a client genuinely needs an
   isolated dependency (e.g. `SocialTokenVerifier`).

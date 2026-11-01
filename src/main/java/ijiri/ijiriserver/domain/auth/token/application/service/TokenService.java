@@ -2,10 +2,13 @@ package ijiri.ijiriserver.domain.auth.token.application.service;
 
 import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.token.application.port.in.TokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.IssueTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.RefreshTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutByRefreshTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutTokenUseCase;
 import ijiri.ijiriserver.domain.auth.token.application.port.out.RefreshTokenPort;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindActiveMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.event.MemberSuspendedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
@@ -25,10 +28,13 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class TokenService implements TokenUseCase, SessionValidator {
+public class TokenService implements IssueTokenUseCase,
+        RefreshTokenUseCase,
+        SignOutTokenUseCase,
+        SignOutByRefreshTokenUseCase, SessionValidator {
 
     private final RefreshTokenPort refreshTokenPort;
-    private final MemberUseCase memberUseCase;
+    private final FindActiveMemberUseCase findActiveMemberUseCase;
     private final JwtProvider jwtProvider;
     private final Clock clock;
 
@@ -69,7 +75,7 @@ public class TokenService implements TokenUseCase, SessionValidator {
             throw new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN);
         }
         // 탈퇴 등으로 활성 회원이 아니면 앱이 로그인 화면으로 가도록 404 가 아닌 401 로 응답한다
-        Member member = memberUseCase.findActiveMember(Long.valueOf(claims.getSubject()))
+        Member member = findActiveMemberUseCase.findActiveMember(Long.valueOf(claims.getSubject()))
                 .orElseThrow(() -> new CustomException(AuthStatusCode.INVALID_REFRESH_TOKEN));
         return issue(member);
     }

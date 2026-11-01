@@ -1,11 +1,15 @@
 package ijiri.ijiriserver.domain.block.application.service;
 
 import ijiri.ijiriserver.domain.block.application.data.response.BlockResponse;
-import ijiri.ijiriserver.domain.block.application.port.in.BlockUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.BlockMemberUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.GetBlockedMembersUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.GetHiddenMemberIdsBlockUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.UnblockUseCase;
 import ijiri.ijiriserver.domain.block.application.port.out.MemberBlockPort;
 import ijiri.ijiriserver.domain.block.entity.MemberBlock;
 import ijiri.ijiriserver.domain.block.exception.BlockStatusCode;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetActiveMembersUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -25,10 +29,14 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class BlockService implements BlockUseCase {
+public class BlockService implements BlockMemberUseCase,
+        UnblockUseCase,
+        GetBlockedMembersUseCase,
+        GetHiddenMemberIdsBlockUseCase {
 
     private final MemberBlockPort memberBlockPort;
-    private final MemberUseCase memberUseCase;
+    private final GetActiveMembersUseCase getActiveMembersUseCase;
+    private final GetByIdMemberUseCase getByIdMemberUseCase;
 
     // 이미 차단한 회원이면 그대로 성공으로 응답한다
     @Override
@@ -37,8 +45,8 @@ public class BlockService implements BlockUseCase {
         if (blockerId.equals(targetId)) {
             throw new CustomException(BlockStatusCode.CANNOT_BLOCK_SELF);
         }
-        memberUseCase.getById(blockerId);
-        memberUseCase.getById(targetId);
+        getByIdMemberUseCase.getById(blockerId);
+        getByIdMemberUseCase.getById(targetId);
         if (memberBlockPort.findByBlockerIdAndBlockedId(blockerId, targetId).isEmpty()) {
             memberBlockPort.save(MemberBlock.builder()
                     .blockerId(blockerId)
@@ -61,7 +69,7 @@ public class BlockService implements BlockUseCase {
         List<Long> blockedIds = memberBlockPort.findAllByBlockerIdOrderByIdDesc(memberId).stream()
                 .map(MemberBlock::getBlockedId)
                 .toList();
-        Map<Long, Member> members = memberUseCase.getActiveMembers(blockedIds).stream()
+        Map<Long, Member> members = getActiveMembersUseCase.getActiveMembers(blockedIds).stream()
                 .collect(Collectors.toMap(Member::getId, Function.identity()));
         return new BlockResponse(blockedIds.stream()
                 .map(members::get)

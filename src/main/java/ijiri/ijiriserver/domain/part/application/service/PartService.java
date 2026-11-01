@@ -4,7 +4,12 @@ import ijiri.ijiriserver.domain.part.application.data.PartCommand;
 import ijiri.ijiriserver.domain.part.application.data.PartInfo;
 import ijiri.ijiriserver.domain.part.application.data.PartSuggestion;
 import ijiri.ijiriserver.domain.part.application.data.response.PartResponse;
-import ijiri.ijiriserver.domain.part.application.port.in.PartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.GetBrandsPartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.GetPartInfosUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.RecordUsagePartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.ResolvePartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.SearchPartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.SuggestPartUseCase;
 import ijiri.ijiriserver.domain.part.application.port.out.BrandPort;
 import ijiri.ijiriserver.domain.part.application.port.out.PartCarModelUsagePort;
 import ijiri.ijiriserver.domain.part.application.port.out.PartPort;
@@ -32,7 +37,12 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class PartService implements PartUseCase {
+public class PartService implements SearchPartUseCase,
+        SuggestPartUseCase,
+        GetBrandsPartUseCase,
+        ResolvePartUseCase,
+        GetPartInfosUseCase,
+        RecordUsagePartUseCase {
 
     private static final int SUGGEST_LIMIT = 3;
     // 이보다 낮은 유사도는 "혹시 이 부품인가요?" 후보로 보여주지 않는다

@@ -1,18 +1,22 @@
 package ijiri.ijiriserver.domain.post.application.service;
 
-import ijiri.ijiriserver.domain.block.application.port.in.BlockUseCase;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.CarModelUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.GetHiddenMemberIdsBlockUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetModelNamesCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetSpecByTrimCarModelUseCase;
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
-import ijiri.ijiriserver.domain.interestcar.application.port.in.InterestCarUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.MemberUseCase;
+import ijiri.ijiriserver.domain.interestcar.application.port.in.GetCarModelIdsInterestCarUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindActiveMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetSnapshotOwnedCarUseCase;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarSnapshot;
-import ijiri.ijiriserver.domain.ownedcar.application.port.in.OwnedCarUseCase;
 import ijiri.ijiriserver.domain.part.application.data.PartCommand;
 import ijiri.ijiriserver.domain.part.application.data.PartInfo;
-import ijiri.ijiriserver.domain.part.application.port.in.PartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.GetPartInfosUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.RecordUsagePartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.ResolvePartUseCase;
 import ijiri.ijiriserver.domain.post.application.data.PostPartSummary;
 import ijiri.ijiriserver.domain.post.application.data.WishTarget;
 import ijiri.ijiriserver.domain.post.application.data.request.PostCreateRequest;
@@ -21,7 +25,16 @@ import ijiri.ijiriserver.domain.post.application.data.request.PostPartRequest;
 import ijiri.ijiriserver.domain.post.application.data.request.PostTagRequest;
 import ijiri.ijiriserver.domain.post.application.data.request.PostUpdateRequest;
 import ijiri.ijiriserver.domain.post.application.data.response.PostResponse;
-import ijiri.ijiriserver.domain.post.application.port.in.PostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.CreatePostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.DeletePostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetAuthorIdPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetFeedPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetMemberPostsUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetPostPartSummariesUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetWishTargetPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.HidePostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.UpdatePostUseCase;
 import ijiri.ijiriserver.domain.post.application.port.out.PostPartPort;
 import ijiri.ijiriserver.domain.post.application.port.out.PostPort;
 import ijiri.ijiriserver.domain.post.application.port.out.PostWishReader;
@@ -33,7 +46,8 @@ import ijiri.ijiriserver.domain.post.event.PostDeletedEvent;
 import ijiri.ijiriserver.domain.post.event.PostPartsRemovedEvent;
 import ijiri.ijiriserver.domain.post.exception.PostStatusCode;
 import ijiri.ijiriserver.domain.upload.application.data.AttachedImage;
-import ijiri.ijiriserver.domain.upload.application.port.in.UploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.AttachUploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUploadUseCase;
 import ijiri.ijiriserver.domain.upload.entity.UploadPurpose;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import lombok.RequiredArgsConstructor;
@@ -57,17 +71,31 @@ import java.util.stream.IntStream;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
-public class PostService implements PostUseCase {
+public class PostService implements CreatePostUseCase,
+        UpdatePostUseCase,
+        DeletePostUseCase,
+        GetPostUseCase,
+        GetFeedPostUseCase,
+        GetMemberPostsUseCase,
+        GetAuthorIdPostUseCase,
+        HidePostUseCase,
+        GetWishTargetPostUseCase,
+        GetPostPartSummariesUseCase {
 
     private final PostPort postPort;
     private final PostPartPort postPartPort;
-    private final MemberUseCase memberUseCase;
-    private final OwnedCarUseCase ownedCarUseCase;
-    private final CarModelUseCase carModelUseCase;
-    private final InterestCarUseCase interestCarUseCase;
-    private final PartUseCase partUseCase;
-    private final UploadUseCase uploadUseCase;
-    private final BlockUseCase blockUseCase;
+    private final FindActiveMemberUseCase findActiveMemberUseCase;
+    private final GetByIdMemberUseCase getByIdMemberUseCase;
+    private final GetSnapshotOwnedCarUseCase getSnapshotOwnedCarUseCase;
+    private final GetModelNamesCarModelUseCase getModelNamesCarModelUseCase;
+    private final GetSpecByTrimCarModelUseCase getSpecByTrimCarModelUseCase;
+    private final GetCarModelIdsInterestCarUseCase getCarModelIdsInterestCarUseCase;
+    private final GetPartInfosUseCase getPartInfosUseCase;
+    private final RecordUsagePartUseCase recordUsagePartUseCase;
+    private final ResolvePartUseCase resolvePartUseCase;
+    private final AttachUploadUseCase attachUploadUseCase;
+    private final DeleteUploadUseCase deleteUploadUseCase;
+    private final GetHiddenMemberIdsBlockUseCase getHiddenMemberIdsBlockUseCase;
     private final PostWishReader postWishReader;
     private final ApplicationEventPublisher eventPublisher;
 
@@ -75,13 +103,13 @@ public class PostService implements PostUseCase {
     @Override
     @Transactional
     public PostResponse create(Long memberId, PostCreateRequest request) {
-        memberUseCase.getById(memberId);
-        OwnedCarSnapshot car = ownedCarUseCase.getSnapshot(memberId, request.ownedCarId());
+        getByIdMemberUseCase.getById(memberId);
+        OwnedCarSnapshot car = getSnapshotOwnedCarUseCase.getSnapshot(memberId, request.ownedCarId());
         if (request.images().stream().anyMatch(image -> image.width() == null || image.height() == null)) {
             throw new CustomException(PostStatusCode.MISSING_IMAGE_SIZE);
         }
         Post post = Post.of(memberId, car, request.buildStyle(), normalizeContent(request.content()));
-        List<AttachedImage> attached = uploadUseCase.attach(
+        List<AttachedImage> attached = attachUploadUseCase.attach(
                 memberId,
                 request.images().stream().map(PostImageRequest::imageKey).toList(),
                 UploadPurpose.POST
@@ -103,7 +131,7 @@ public class PostService implements PostUseCase {
         });
         post.replaceParts(buildParts(post, request.parts(), request.images(), imagesByRequestKey, Map.of()));
         postPort.save(post);
-        partUseCase.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), 1);
+        recordUsagePartUseCase.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), 1);
         return PostResponse.created(post.getId());
     }
 
@@ -141,8 +169,8 @@ public class PostService implements PostUseCase {
         post.replaceParts(parts);
 
         Set<Long> afterPartIds = distinctPartIds(parts);
-        partUseCase.recordUsage(difference(afterPartIds, beforePartIds), post.getCarModelId(), 1);
-        partUseCase.recordUsage(difference(beforePartIds, afterPartIds), post.getCarModelId(), -1);
+        recordUsagePartUseCase.recordUsage(difference(afterPartIds, beforePartIds), post.getCarModelId(), 1);
+        recordUsagePartUseCase.recordUsage(difference(beforePartIds, afterPartIds), post.getCarModelId(), -1);
         if (!removed.isEmpty()) {
             eventPublisher.publishEvent(new PostPartsRemovedEvent(removed));
         }
@@ -161,16 +189,18 @@ public class PostService implements PostUseCase {
                 .filter(found -> found.isPublic()
                         || (found.isWrittenBy(viewerId) && found.getStatus() == PostStatus.HIDDEN))
                 .orElseThrow(() -> new CustomException(PostStatusCode.POST_NOT_FOUND));
-        if (viewerId != null && blockUseCase.getHiddenMemberIds(viewerId).contains(post.getMemberId())) {
+        if (viewerId != null && getHiddenMemberIdsBlockUseCase.getHiddenMemberIds(
+                viewerId).contains(post.getMemberId())
+        ) {
             throw new CustomException(PostStatusCode.POST_NOT_FOUND);
         }
-        Member author = memberUseCase.findActiveMember(post.getMemberId()).orElse(null);
+        Member author = findActiveMemberUseCase.findActiveMember(post.getMemberId()).orElse(null);
         List<Long> postPartIds = post.getParts().stream().map(PostPart::getId).toList();
         return PostResponse.detail(
                 post,
                 author,
-                carModelUseCase.getSpecByTrim(post.getCarTrimId()),
-                partUseCase.getPartInfos(distinctPartIds(post.getParts())),
+                getSpecByTrimCarModelUseCase.getSpecByTrim(post.getCarTrimId()),
+                getPartInfosUseCase.getPartInfos(distinctPartIds(post.getParts())),
                 postWishReader.countWishes(postPartIds),
                 viewerId != null ? postWishReader.findWishedPostPartIds(viewerId, postPartIds) : Set.of(),
                 post.isWrittenBy(viewerId)
@@ -240,8 +270,8 @@ public class PostService implements PostUseCase {
         List<PostPart> parts = postPartPort.findAllById(postPartIds).stream()
                 .filter(part -> part.getPost().isPublic())
                 .toList();
-        Map<Long, PartInfo> infos = partUseCase.getPartInfos(distinctPartIds(parts));
-        Map<Long, String> modelNames = carModelUseCase.getModelNames(
+        Map<Long, PartInfo> infos = getPartInfosUseCase.getPartInfos(distinctPartIds(parts));
+        Map<Long, String> modelNames = getModelNamesCarModelUseCase.getModelNames(
                 parts.stream().map(part -> part.getPost().getCarModelId()).collect(Collectors.toSet())
         );
         return parts.stream().collect(Collectors.toMap(PostPart::getId, part -> {
@@ -278,12 +308,12 @@ public class PostService implements PostUseCase {
                 .map(PostImage::getImageKey)
                 .toList();
         eventPublisher.publishEvent(new PostDeletedEvent(post.getId()));
-        partUseCase.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), -1);
+        recordUsagePartUseCase.recordUsage(distinctPartIds(post.getParts()), post.getCarModelId(), -1);
         // 태그는 사진을 FK 로 가리키는데 Hibernate 의 삭제 순서는 보장되지 않으므로, 부품·태그를 먼저 지운다
         post.replaceParts(List.of());
         postPort.flush();
         postPort.delete(post);
-        uploadUseCase.delete(imageKeys);
+        deleteUploadUseCase.delete(imageKeys);
     }
 
     // ref 로 태그와 부품을 잇는다. 수정할 때 postPartId 가 있는 부품은 기존 PostPart 를 그대로 쓴다
@@ -334,7 +364,7 @@ public class PostService implements PostUseCase {
     }
 
     private PartInfo resolvePart(PostPartRequest request) {
-        return partUseCase.resolve(new PartCommand(
+        return resolvePartUseCase.resolve(new PartCommand(
                 request.partId(),
                 request.brandName(),
                 request.partName(),
@@ -349,14 +379,14 @@ public class PostService implements PostUseCase {
         if (!carModelIds.isEmpty()) {
             return carModelIds;
         }
-        return viewerId != null ? interestCarUseCase.getCarModelIds(viewerId) : List.of();
+        return viewerId != null ? getCarModelIdsInterestCarUseCase.getCarModelIds(viewerId) : List.of();
     }
 
     private PostResponse toCards(Specification<Post> spec, int size) {
         List<Post> found = postPort.findNewest(spec, size + 1);
         boolean hasNext = found.size() > size;
         List<Post> page = hasNext ? found.subList(0, size) : found;
-        Map<Long, String> modelNames = carModelUseCase.getModelNames(
+        Map<Long, String> modelNames = getModelNamesCarModelUseCase.getModelNames(
                 page.stream().map(Post::getCarModelId).collect(Collectors.toSet())
         );
         return PostResponse.cards(
@@ -378,7 +408,7 @@ public class PostService implements PostUseCase {
     }
 
     private Set<Long> hiddenAuthorsFor(Long viewerId) {
-        return viewerId != null ? blockUseCase.getHiddenMemberIds(viewerId) : Set.of();
+        return viewerId != null ? getHiddenMemberIdsBlockUseCase.getHiddenMemberIds(viewerId) : Set.of();
     }
 
     private Set<Long> distinctPartIds(List<PostPart> parts) {

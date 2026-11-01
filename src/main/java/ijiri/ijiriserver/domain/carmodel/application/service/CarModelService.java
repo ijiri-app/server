@@ -3,12 +3,12 @@ package ijiri.ijiriserver.domain.carmodel.application.service;
 import ijiri.ijiriserver.domain.carmodel.application.data.CarModelInfo;
 import ijiri.ijiriserver.domain.carmodel.application.data.response.CarModelResponse;
 import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelInfosUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelNamesUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelsUseCase;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.GetModelNamesCarModelUseCase;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.GetSpecByTrimCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarSpecByTrimUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateCarModelsExistUseCase;
-import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateModelYearCarModelUseCase;
+import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateModelYearUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarGenerationPort;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarModelPort;
 import ijiri.ijiriserver.domain.carmodel.application.port.out.CarTrimPort;
@@ -50,10 +50,10 @@ import java.util.stream.Collectors;
 public class CarModelService implements GetCarModelsUseCase,
         GetCarModelUseCase,
         ValidateCarModelsExistUseCase,
-        GetSpecByTrimCarModelUseCase,
-        ValidateModelYearCarModelUseCase,
+        GetCarSpecByTrimUseCase,
+        ValidateModelYearUseCase,
         GetCarModelInfosUseCase,
-        GetModelNamesCarModelUseCase {
+        GetCarModelNamesUseCase {
 
     private static final String MASTER_CSV = "car-master/car_master.csv";
     // brand,model,is_core,generation_code,start_year,end_year,trim

@@ -115,8 +115,10 @@ domain/<feature>
 
 ### Service layer
 
-- Each inbound operation has its own `port/in` interface (`GetMeMemberUseCase`, `CreatePostUseCase`), and
+- Each inbound operation has its own `port/in` interface (`GetMyProfileUseCase`, `CreatePostUseCase`), and
   callers inject only the use cases they call.
-- One `XxxService` may implement several related use cases of a domain / feature area.
+- A service implements the related use cases of one responsibility. Split it by cohesion when it grows
+  (`PostCommandService` / `PostQueryService`; `MemberQueryService`, `MemberCommandService`,
+  `MemberLifecycleService`), not into one class per use case.
 - Introduce an abstraction only when multiple implementations exist or a client genuinely needs an
   isolated dependency (e.g. `SocialTokenVerifier`).

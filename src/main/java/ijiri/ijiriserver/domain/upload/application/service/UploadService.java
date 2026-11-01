@@ -6,10 +6,10 @@ import ijiri.ijiriserver.domain.upload.application.data.AttachedImage;
 import ijiri.ijiriserver.domain.upload.application.data.StoredObject;
 import ijiri.ijiriserver.domain.upload.application.data.request.UploadUrlRequest;
 import ijiri.ijiriserver.domain.upload.application.data.response.UploadResponse;
-import ijiri.ijiriserver.domain.upload.application.port.in.AttachUploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.AttachUploadedImagesUseCase;
 import ijiri.ijiriserver.domain.upload.application.port.in.CreateUploadUrlsUseCase;
-import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUnattachedUploadUseCase;
-import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUploadUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUnattachedUploadsUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.DeleteUploadedImagesUseCase;
 import ijiri.ijiriserver.domain.upload.application.port.out.ImageStorageClient;
 import ijiri.ijiriserver.domain.upload.application.port.out.UploadedImagePort;
 import ijiri.ijiriserver.domain.upload.entity.UploadPurpose;
@@ -46,9 +46,9 @@ import java.util.stream.IntStream;
 @Service
 @RequiredArgsConstructor
 public class UploadService implements CreateUploadUrlsUseCase,
-        AttachUploadUseCase,
-        DeleteUploadUseCase,
-        DeleteUnattachedUploadUseCase {
+        AttachUploadedImagesUseCase,
+        DeleteUploadedImagesUseCase,
+        DeleteUnattachedUploadsUseCase {
 
     private static final String UPLOAD_KEY_PREFIX = "upload:member:";
     private static final int UPLOAD_LIMIT_PER_MEMBER = 100;

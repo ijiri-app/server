@@ -2,9 +2,9 @@ package ijiri.ijiriserver.domain.interestcar.application.service;
 
 import ijiri.ijiriserver.domain.carmodel.application.port.in.GetCarModelInfosUseCase;
 import ijiri.ijiriserver.domain.carmodel.application.port.in.ValidateCarModelsExistUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
 import ijiri.ijiriserver.domain.interestcar.application.port.out.MemberInterestCarPort;
 import ijiri.ijiriserver.domain.interestcar.entity.MemberInterestCar;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMemberUseCase;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -22,7 +22,7 @@ class InterestCarServiceTest {
     private final MemberInterestCarPort repository = mock(MemberInterestCarPort.class);
     private final InterestCarService service = new InterestCarService(
             repository,
-            mock(GetByIdMemberUseCase.class),
+            mock(GetMemberUseCase.class),
             mock(GetCarModelInfosUseCase.class),
             mock(ValidateCarModelsExistUseCase.class)
     );

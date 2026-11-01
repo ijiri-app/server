@@ -2,7 +2,7 @@ package ijiri.ijiriserver.domain.post.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
 import ijiri.ijiriserver.domain.post.application.data.response.PostResponse;
-import ijiri.ijiriserver.domain.post.application.port.in.GetFeedPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetFeedUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,7 +24,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class FeedController {
 
-    private final GetFeedPostUseCase getFeedPostUseCase;
+    private final GetFeedUseCase getFeedUseCase;
 
     @Operation(
             summary = "피드",
@@ -42,7 +42,7 @@ public class FeedController {
             @RequestParam(required = false) Long cursor,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(getFeedPostUseCase.getFeed(
+        return BaseResponse.ok(getFeedUseCase.getFeed(
                 memberId != null ? Long.valueOf(memberId) : null,
                 carModelId,
                 carModelIds != null ? carModelIds : List.of(),

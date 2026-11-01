@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.auth.common.application.service;
 
-import ijiri.ijiriserver.domain.auth.common.application.port.in.UnlinkAfterWithdrawalSocialUnlinkUseCase;
-import ijiri.ijiriserver.domain.auth.common.application.port.in.UnlinkBeforePurgeSocialUnlinkUseCase;
+import ijiri.ijiriserver.domain.auth.common.application.port.in.UnlinkSocialAfterWithdrawalUseCase;
+import ijiri.ijiriserver.domain.auth.common.application.port.in.UnlinkSocialBeforePurgeUseCase;
 import ijiri.ijiriserver.domain.auth.common.application.port.out.SocialUnlinkClient;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
@@ -25,8 +25,8 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-public class SocialUnlinkService implements UnlinkAfterWithdrawalSocialUnlinkUseCase,
-        UnlinkBeforePurgeSocialUnlinkUseCase {
+public class SocialUnlinkService implements UnlinkSocialAfterWithdrawalUseCase,
+        UnlinkSocialBeforePurgeUseCase {
 
     private final Map<Provider, SocialUnlinkClient> clients;
 

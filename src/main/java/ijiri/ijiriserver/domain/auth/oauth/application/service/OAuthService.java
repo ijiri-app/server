@@ -4,12 +4,12 @@ import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthRespon
 import ijiri.ijiriserver.domain.auth.common.application.port.out.SocialTokenVerifier;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.oauth.application.data.request.OAuthSignInRequest;
-import ijiri.ijiriserver.domain.auth.oauth.application.port.in.SignInOAuthUseCase;
+import ijiri.ijiriserver.domain.auth.oauth.application.port.in.OAuthSignInUseCase;
 import ijiri.ijiriserver.domain.auth.token.application.port.in.IssueTokenUseCase;
 import ijiri.ijiriserver.domain.member.application.data.MemberRegisterCommand;
 import ijiri.ijiriserver.domain.member.application.data.MemberRegisterResult;
 import ijiri.ijiriserver.domain.member.application.data.response.MemberResponse;
-import ijiri.ijiriserver.domain.member.application.port.in.RegisterIfAbsentMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.RegisterSocialMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.entity.Provider;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -23,20 +23,20 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
-public class OAuthService implements SignInOAuthUseCase {
+public class OAuthService implements OAuthSignInUseCase {
 
     private final Map<Provider, SocialTokenVerifier> verifiers;
-    private final RegisterIfAbsentMemberUseCase registerIfAbsentMemberUseCase;
+    private final RegisterSocialMemberUseCase registerSocialMemberUseCase;
     private final IssueTokenUseCase issueTokenUseCase;
 
     public OAuthService(
             List<SocialTokenVerifier> verifiers,
-            RegisterIfAbsentMemberUseCase registerIfAbsentMemberUseCase,
+            RegisterSocialMemberUseCase registerSocialMemberUseCase,
             IssueTokenUseCase issueTokenUseCase
     ) {
         this.verifiers = verifiers.stream()
                 .collect(Collectors.toMap(SocialTokenVerifier::provider, Function.identity()));
-        this.registerIfAbsentMemberUseCase = registerIfAbsentMemberUseCase;
+        this.registerSocialMemberUseCase = registerSocialMemberUseCase;
         this.issueTokenUseCase = issueTokenUseCase;
     }
 
@@ -54,9 +54,9 @@ public class OAuthService implements SignInOAuthUseCase {
     // 그 트랜잭션은 롤백됐으므로 다시 호출하면 먼저 가입된 회원을 기존 회원으로 조회한다
     private MemberRegisterResult register(MemberRegisterCommand command) {
         try {
-            return registerIfAbsentMemberUseCase.registerIfAbsent(command);
+            return registerSocialMemberUseCase.registerIfAbsent(command);
         } catch (DataIntegrityViolationException e) {
-            return registerIfAbsentMemberUseCase.registerIfAbsent(command);
+            return registerSocialMemberUseCase.registerIfAbsent(command);
         }
     }
 }

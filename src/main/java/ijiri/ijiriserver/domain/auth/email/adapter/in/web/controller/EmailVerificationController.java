@@ -4,8 +4,8 @@ import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthRespon
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.VerificationCodeConfirmRequest;
 import ijiri.ijiriserver.domain.auth.email.application.data.request.VerificationCodeSendRequest;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.SendSignupCodeEmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.VerifySignupCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendSignupCodeUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.VerifySignupCodeUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.ratelimit.RateLimiter;
 import io.swagger.v3.oas.annotations.Operation;
@@ -35,8 +35,8 @@ public class EmailVerificationController {
     private static final int SEND_LIMIT_PER_IP = 10;
     private static final Duration SEND_LIMIT_PERIOD = Duration.ofHours(1);
 
-    private final SendSignupCodeEmailVerificationUseCase sendSignupCodeEmailVerificationUseCase;
-    private final VerifySignupCodeEmailVerificationUseCase verifySignupCodeEmailVerificationUseCase;
+    private final SendSignupCodeUseCase sendSignupCodeUseCase;
+    private final VerifySignupCodeUseCase verifySignupCodeUseCase;
     private final RateLimiter rateLimiter;
 
     @Operation(
@@ -51,7 +51,7 @@ public class EmailVerificationController {
             HttpServletRequest httpRequest
     ) {
         rateLimiter.check(SEND_KEY_PREFIX + httpRequest.getRemoteAddr(), SEND_LIMIT_PER_IP, SEND_LIMIT_PERIOD);
-        sendSignupCodeEmailVerificationUseCase.sendSignupCode(request.email());
+        sendSignupCodeUseCase.sendSignupCode(request.email());
     }
 
     @Operation(
@@ -63,7 +63,7 @@ public class EmailVerificationController {
     public BaseResponse<AuthResponse> verifyCode(@Valid @RequestBody VerificationCodeConfirmRequest request) {
         return BaseResponse.of(
                 AuthStatusCode.EMAIL_VERIFIED,
-                verifySignupCodeEmailVerificationUseCase.verifySignupCode(request.email(), request.code())
+                verifySignupCodeUseCase.verifySignupCode(request.email(), request.code())
         );
     }
 }

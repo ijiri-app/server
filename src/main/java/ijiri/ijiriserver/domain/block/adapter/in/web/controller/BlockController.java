@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.block.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.block.application.data.response.BlockResponse;
 import ijiri.ijiriserver.domain.block.application.port.in.BlockMemberUseCase;
 import ijiri.ijiriserver.domain.block.application.port.in.GetBlockedMembersUseCase;
-import ijiri.ijiriserver.domain.block.application.port.in.UnblockUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.UnblockMemberUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,7 +27,7 @@ public class BlockController {
 
     private final BlockMemberUseCase blockMemberUseCase;
     private final GetBlockedMembersUseCase getBlockedMembersUseCase;
-    private final UnblockUseCase unblockUseCase;
+    private final UnblockMemberUseCase unblockMemberUseCase;
 
     @Operation(
             summary = "사용자 차단",
@@ -52,7 +52,7 @@ public class BlockController {
             @Parameter(hidden = true) @AuthenticationPrincipal String blockerId,
             @PathVariable Long memberId
     ) {
-        unblockUseCase.unblock(Long.valueOf(blockerId), memberId);
+        unblockMemberUseCase.unblock(Long.valueOf(blockerId), memberId);
     }
 
     @Operation(

@@ -1,8 +1,8 @@
 package ijiri.ijiriserver.domain.upload.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.upload.application.data.ImageFileContent;
-import ijiri.ijiriserver.domain.upload.application.port.in.LoadDbImageFileUseCase;
-import ijiri.ijiriserver.domain.upload.application.port.in.ReceiveDbImageFileUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.LoadImageFileUseCase;
+import ijiri.ijiriserver.domain.upload.application.port.in.ReceiveImageFileUseCase;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
 import ijiri.ijiriserver.global.exception.status_code.CommonStatusCode;
 import io.swagger.v3.oas.annotations.Hidden;
@@ -39,8 +39,8 @@ public class ImageFileController {
     // 키는 한 번 정해지면 내용이 바뀌지 않으므로 오래 캐시한다
     private static final CacheControl IMAGE_CACHE = CacheControl.maxAge(Duration.ofDays(365)).cachePublic();
 
-    private final LoadDbImageFileUseCase loadDbImageFileUseCase;
-    private final ReceiveDbImageFileUseCase receiveDbImageFileUseCase;
+    private final LoadImageFileUseCase loadImageFileUseCase;
+    private final ReceiveImageFileUseCase receiveImageFileUseCase;
 
     @PutMapping("/uploads/files/{*imageKey}")
     public ResponseEntity<Void> upload(
@@ -50,7 +50,7 @@ public class ImageFileController {
             @RequestHeader(HttpHeaders.CONTENT_TYPE) String contentType,
             HttpServletRequest httpRequest
     ) {
-        receiveDbImageFileUseCase.receive(
+        receiveImageFileUseCase.receive(
                 stripLeadingSlash(imageKey),
                 expires,
                 signature,
@@ -62,7 +62,7 @@ public class ImageFileController {
 
     @GetMapping("/images/{*imageKey}")
     public ResponseEntity<byte[]> getImage(@PathVariable String imageKey) {
-        ImageFileContent image = loadDbImageFileUseCase.load(stripLeadingSlash(imageKey));
+        ImageFileContent image = loadImageFileUseCase.load(stripLeadingSlash(imageKey));
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(image.contentType()))
                 .cacheControl(IMAGE_CACHE)

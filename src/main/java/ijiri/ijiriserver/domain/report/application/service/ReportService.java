@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.domain.report.application.service;
 
-import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMemberUseCase;
 import ijiri.ijiriserver.domain.member.application.port.in.SuspendMemberUseCase;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
-import ijiri.ijiriserver.domain.post.application.port.in.GetAuthorIdPostUseCase;
+import ijiri.ijiriserver.domain.post.application.port.in.GetPostAuthorIdUseCase;
 import ijiri.ijiriserver.domain.post.application.port.in.HidePostUseCase;
 import ijiri.ijiriserver.domain.report.application.data.ReportSummary;
 import ijiri.ijiriserver.domain.report.application.data.request.ReportCreateRequest;
@@ -42,16 +42,16 @@ public class ReportService implements CreateReportUseCase,
     private static final int DEFAULT_SUSPEND_DAYS = 7;
 
     private final ReportPort reportPort;
-    private final GetAuthorIdPostUseCase getAuthorIdPostUseCase;
+    private final GetPostAuthorIdUseCase getPostAuthorIdUseCase;
     private final HidePostUseCase hidePostUseCase;
-    private final GetByIdMemberUseCase getByIdMemberUseCase;
+    private final GetMemberUseCase getMemberUseCase;
     private final SuspendMemberUseCase suspendMemberUseCase;
     private final Clock clock;
 
     @Override
     @Transactional
     public void report(Long reporterId, ReportCreateRequest request) {
-        getByIdMemberUseCase.getById(reporterId);
+        getMemberUseCase.getById(reporterId);
         Long targetMemberId = resolveTargetMemberId(request.targetType(), request.targetId());
         if (targetMemberId.equals(reporterId)) {
             throw new CustomException(ReportStatusCode.CANNOT_REPORT_SELF);
@@ -150,8 +150,8 @@ public class ReportService implements CreateReportUseCase,
 
     private Long resolveTargetMemberId(ReportTargetType targetType, Long targetId) {
         return switch (targetType) {
-            case POST -> getAuthorIdPostUseCase.getAuthorId(targetId);
-            case MEMBER -> getByIdMemberUseCase.getById(targetId).getId();
+            case POST -> getPostAuthorIdUseCase.getAuthorId(targetId);
+            case MEMBER -> getMemberUseCase.getById(targetId).getId();
         };
     }
 }

@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.domain.part.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.part.application.data.response.PartResponse;
-import ijiri.ijiriserver.domain.part.application.port.in.GetBrandsPartUseCase;
-import ijiri.ijiriserver.domain.part.application.port.in.SearchPartUseCase;
-import ijiri.ijiriserver.domain.part.application.port.in.SuggestPartUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.GetBrandsUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.SearchPartsUseCase;
+import ijiri.ijiriserver.domain.part.application.port.in.SuggestPartsUseCase;
 import ijiri.ijiriserver.domain.part.entity.Part;
 import ijiri.ijiriserver.domain.part.entity.PartCategory;
 import ijiri.ijiriserver.global.data.BaseResponse;
@@ -23,9 +23,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PartController {
 
-    private final GetBrandsPartUseCase getBrandsPartUseCase;
-    private final SearchPartUseCase searchPartUseCase;
-    private final SuggestPartUseCase suggestPartUseCase;
+    private final GetBrandsUseCase getBrandsUseCase;
+    private final SearchPartsUseCase searchPartsUseCase;
+    private final SuggestPartsUseCase suggestPartsUseCase;
 
     @Operation(
             summary = "부품 검색",
@@ -39,7 +39,7 @@ public class PartController {
             @RequestParam(required = false) Long carModelId,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int size
     ) {
-        return BaseResponse.ok(searchPartUseCase.search(q, category, carModelId, size));
+        return BaseResponse.ok(searchPartsUseCase.search(q, category, carModelId, size));
     }
 
     @Operation(
@@ -53,7 +53,7 @@ public class PartController {
             @RequestParam(required = false) PartCategory category,
             @RequestParam(required = false) Long carModelId
     ) {
-        return BaseResponse.ok(suggestPartUseCase.suggest(q, category, carModelId));
+        return BaseResponse.ok(suggestPartsUseCase.suggest(q, category, carModelId));
     }
 
     @Operation(
@@ -64,6 +64,6 @@ public class PartController {
     public BaseResponse<PartResponse> getBrands(
             @RequestParam(required = false) @Size(max = 50) String q
     ) {
-        return BaseResponse.ok(getBrandsPartUseCase.getBrands(q));
+        return BaseResponse.ok(getBrandsUseCase.getBrands(q));
     }
 }

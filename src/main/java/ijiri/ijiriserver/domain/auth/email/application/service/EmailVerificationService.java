@@ -2,11 +2,11 @@ package ijiri.ijiriserver.domain.auth.email.application.service;
 
 import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeResetCodeEmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeSignupTokenEmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.SendResetCodeEmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.SendSignupCodeEmailVerificationUseCase;
-import ijiri.ijiriserver.domain.auth.email.application.port.in.VerifySignupCodeEmailVerificationUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeResetCodeUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.ConsumeSignupTokenUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendResetCodeUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.SendSignupCodeUseCase;
+import ijiri.ijiriserver.domain.auth.email.application.port.in.VerifySignupCodeUseCase;
 import ijiri.ijiriserver.domain.auth.email.application.port.out.EmailVerificationPort;
 import ijiri.ijiriserver.domain.auth.email.application.port.out.VerificationMailPort;
 import ijiri.ijiriserver.domain.auth.email.entity.EmailVerification;
@@ -32,11 +32,11 @@ import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
-public class EmailVerificationService implements SendSignupCodeEmailVerificationUseCase,
-        VerifySignupCodeEmailVerificationUseCase,
-        ConsumeSignupTokenEmailVerificationUseCase,
-        SendResetCodeEmailVerificationUseCase,
-        ConsumeResetCodeEmailVerificationUseCase {
+public class EmailVerificationService implements SendSignupCodeUseCase,
+        VerifySignupCodeUseCase,
+        ConsumeSignupTokenUseCase,
+        SendResetCodeUseCase,
+        ConsumeResetCodeUseCase {
 
     private static final long CODE_VALID_MINUTES = 5;
     // 가입 코드 확인 후 가입까지 허용하는 시간 = verificationToken 유효 시간

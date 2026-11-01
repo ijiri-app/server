@@ -5,7 +5,7 @@ import ijiri.ijiriserver.domain.ownedcar.application.data.request.OwnedCarUpdate
 import ijiri.ijiriserver.domain.ownedcar.application.data.response.OwnedCarResponse;
 import ijiri.ijiriserver.domain.ownedcar.application.port.in.CreateOwnedCarUseCase;
 import ijiri.ijiriserver.domain.ownedcar.application.port.in.DeleteOwnedCarUseCase;
-import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetAllOwnedCarUseCase;
+import ijiri.ijiriserver.domain.ownedcar.application.port.in.GetOwnedCarsUseCase;
 import ijiri.ijiriserver.domain.ownedcar.application.port.in.UpdateOwnedCarUseCase;
 import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCar;
 import ijiri.ijiriserver.domain.ownedcar.exception.OwnedCarStatusCode;
@@ -35,7 +35,7 @@ public class OwnedCarController {
 
     private final CreateOwnedCarUseCase createOwnedCarUseCase;
     private final DeleteOwnedCarUseCase deleteOwnedCarUseCase;
-    private final GetAllOwnedCarUseCase getAllOwnedCarUseCase;
+    private final GetOwnedCarsUseCase getOwnedCarsUseCase;
     private final UpdateOwnedCarUseCase updateOwnedCarUseCase;
 
     @Operation(
@@ -46,7 +46,7 @@ public class OwnedCarController {
     public BaseResponse<OwnedCarResponse> getAll(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(getAllOwnedCarUseCase.getAll(Long.valueOf(memberId)));
+        return BaseResponse.ok(getOwnedCarsUseCase.getAll(Long.valueOf(memberId)));
     }
 
     @Operation(

@@ -4,8 +4,8 @@ import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthRespon
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.token.application.port.in.IssueTokenUseCase;
 import ijiri.ijiriserver.domain.auth.token.application.port.in.RefreshTokenUseCase;
-import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutByRefreshTokenUseCase;
-import ijiri.ijiriserver.domain.auth.token.application.port.in.SignOutTokenUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.RevokeMemberSessionsUseCase;
+import ijiri.ijiriserver.domain.auth.token.application.port.in.RevokeRefreshTokenSessionUseCase;
 import ijiri.ijiriserver.domain.auth.token.application.port.out.RefreshTokenPort;
 import ijiri.ijiriserver.domain.auth.token.entity.RefreshToken;
 import ijiri.ijiriserver.domain.member.application.port.in.FindActiveMemberUseCase;
@@ -30,8 +30,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TokenService implements IssueTokenUseCase,
         RefreshTokenUseCase,
-        SignOutTokenUseCase,
-        SignOutByRefreshTokenUseCase, SessionValidator {
+        RevokeMemberSessionsUseCase,
+        RevokeRefreshTokenSessionUseCase, SessionValidator {
 
     private final RefreshTokenPort refreshTokenPort;
     private final FindActiveMemberUseCase findActiveMemberUseCase;

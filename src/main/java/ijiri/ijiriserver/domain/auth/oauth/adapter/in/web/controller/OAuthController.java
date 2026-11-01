@@ -3,7 +3,7 @@ package ijiri.ijiriserver.domain.auth.oauth.adapter.in.web.controller;
 import ijiri.ijiriserver.domain.auth.common.application.data.response.AuthResponse;
 import ijiri.ijiriserver.domain.auth.common.exception.AuthStatusCode;
 import ijiri.ijiriserver.domain.auth.oauth.application.data.request.OAuthSignInRequest;
-import ijiri.ijiriserver.domain.auth.oauth.application.port.in.SignInOAuthUseCase;
+import ijiri.ijiriserver.domain.auth.oauth.application.port.in.OAuthSignInUseCase;
 import ijiri.ijiriserver.global.data.BaseResponse;
 import ijiri.ijiriserver.global.jwt.JwtCookieManager;
 import io.swagger.v3.oas.annotations.Operation;
@@ -23,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OAuthController {
 
-    private final SignInOAuthUseCase signInOAuthUseCase;
+    private final OAuthSignInUseCase oAuthSignInUseCase;
     private final JwtCookieManager jwtCookieManager;
 
     @Operation(
@@ -37,7 +37,7 @@ public class OAuthController {
             @Valid @RequestBody OAuthSignInRequest request,
             HttpServletResponse httpResponse
     ) {
-        AuthResponse response = signInOAuthUseCase.signIn(request);
+        AuthResponse response = oAuthSignInUseCase.signIn(request);
         jwtCookieManager.addTokenCookies(httpResponse, response.accessToken(), response.refreshToken());
         return BaseResponse.of(AuthStatusCode.SIGNIN_SUCCESS, response);
     }

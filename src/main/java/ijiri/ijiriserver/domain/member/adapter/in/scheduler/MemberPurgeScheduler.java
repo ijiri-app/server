@@ -1,6 +1,6 @@
 package ijiri.ijiriserver.domain.member.adapter.in.scheduler;
 
-import ijiri.ijiriserver.domain.member.application.port.in.FindPurgeTargetIdsMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.FindMemberPurgeTargetsUseCase;
 import ijiri.ijiriserver.domain.member.application.port.in.PurgeMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +22,7 @@ public class MemberPurgeScheduler {
 
     private static final int BATCH_SIZE = 100;
 
-    private final FindPurgeTargetIdsMemberUseCase findPurgeTargetIdsMemberUseCase;
+    private final FindMemberPurgeTargetsUseCase findMemberPurgeTargetsUseCase;
     private final PurgeMemberUseCase purgeMemberUseCase;
 
     @Scheduled(cron = "0 0 4 * * *", zone = "Asia/Seoul")
@@ -30,7 +30,7 @@ public class MemberPurgeScheduler {
         int purged = 0;
         int failed = 0;
         long afterId = 0;
-        List<Long> memberIds = findPurgeTargetIdsMemberUseCase.findPurgeTargetIds(afterId, BATCH_SIZE);
+        List<Long> memberIds = findMemberPurgeTargetsUseCase.findPurgeTargetIds(afterId, BATCH_SIZE);
         while (!memberIds.isEmpty()) {
             for (Long memberId : memberIds) {
                 try {
@@ -42,7 +42,7 @@ public class MemberPurgeScheduler {
                 }
             }
             afterId = memberIds.getLast();
-            memberIds = findPurgeTargetIdsMemberUseCase.findPurgeTargetIds(afterId, BATCH_SIZE);
+            memberIds = findMemberPurgeTargetsUseCase.findPurgeTargetIds(afterId, BATCH_SIZE);
         }
         log.info("Purged {} withdrawn members ({} failed)", purged, failed);
     }

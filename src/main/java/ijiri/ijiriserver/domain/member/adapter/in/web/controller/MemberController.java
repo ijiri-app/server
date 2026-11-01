@@ -2,9 +2,9 @@ package ijiri.ijiriserver.domain.member.adapter.in.web.controller;
 
 import ijiri.ijiriserver.domain.member.application.data.request.MemberUpdateRequest;
 import ijiri.ijiriserver.domain.member.application.data.response.MemberResponse;
-import ijiri.ijiriserver.domain.member.application.port.in.GetMeMemberUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.GetProfileMemberUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.UpdateProfileMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMemberProfileUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMyProfileUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.UpdateMemberProfileUseCase;
 import ijiri.ijiriserver.domain.member.application.port.in.WithdrawMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode;
@@ -33,9 +33,9 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class MemberController {
 
-    private final GetMeMemberUseCase getMeMemberUseCase;
-    private final GetProfileMemberUseCase getProfileMemberUseCase;
-    private final UpdateProfileMemberUseCase updateProfileMemberUseCase;
+    private final GetMyProfileUseCase getMyProfileUseCase;
+    private final GetMemberProfileUseCase getMemberProfileUseCase;
+    private final UpdateMemberProfileUseCase updateMemberProfileUseCase;
     private final WithdrawMemberUseCase withdrawMemberUseCase;
     private final JwtCookieManager jwtCookieManager;
 
@@ -47,7 +47,7 @@ public class MemberController {
     public BaseResponse<MemberResponse> getMe(
             @Parameter(hidden = true) @AuthenticationPrincipal String memberId
     ) {
-        return BaseResponse.ok(getMeMemberUseCase.getMe(Long.valueOf(memberId)));
+        return BaseResponse.ok(getMyProfileUseCase.getMe(Long.valueOf(memberId)));
     }
 
     @Operation(
@@ -61,7 +61,7 @@ public class MemberController {
     ) {
         return BaseResponse.of(
                 MemberStatusCode.UPDATE_SUCCESS,
-                updateProfileMemberUseCase.updateProfile(Long.valueOf(memberId), request)
+                updateMemberProfileUseCase.updateProfile(Long.valueOf(memberId), request)
         );
     }
 
@@ -86,6 +86,6 @@ public class MemberController {
     )
     @GetMapping("/{memberId}")
     public BaseResponse<MemberResponse> getProfile(@PathVariable Long memberId) {
-        return BaseResponse.ok(getProfileMemberUseCase.getProfile(memberId));
+        return BaseResponse.ok(getMemberProfileUseCase.getProfile(memberId));
     }
 }

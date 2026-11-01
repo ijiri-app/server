@@ -3,13 +3,13 @@ package ijiri.ijiriserver.domain.block.application.service;
 import ijiri.ijiriserver.domain.block.application.data.response.BlockResponse;
 import ijiri.ijiriserver.domain.block.application.port.in.BlockMemberUseCase;
 import ijiri.ijiriserver.domain.block.application.port.in.GetBlockedMembersUseCase;
-import ijiri.ijiriserver.domain.block.application.port.in.GetHiddenMemberIdsBlockUseCase;
-import ijiri.ijiriserver.domain.block.application.port.in.UnblockUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.GetHiddenMemberIdsUseCase;
+import ijiri.ijiriserver.domain.block.application.port.in.UnblockMemberUseCase;
 import ijiri.ijiriserver.domain.block.application.port.out.MemberBlockPort;
 import ijiri.ijiriserver.domain.block.entity.MemberBlock;
 import ijiri.ijiriserver.domain.block.exception.BlockStatusCode;
 import ijiri.ijiriserver.domain.member.application.port.in.GetActiveMembersUseCase;
-import ijiri.ijiriserver.domain.member.application.port.in.GetByIdMemberUseCase;
+import ijiri.ijiriserver.domain.member.application.port.in.GetMemberUseCase;
 import ijiri.ijiriserver.domain.member.entity.Member;
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent;
 import ijiri.ijiriserver.global.exception.exception.CustomException;
@@ -30,13 +30,13 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class BlockService implements BlockMemberUseCase,
-        UnblockUseCase,
+        UnblockMemberUseCase,
         GetBlockedMembersUseCase,
-        GetHiddenMemberIdsBlockUseCase {
+        GetHiddenMemberIdsUseCase {
 
     private final MemberBlockPort memberBlockPort;
     private final GetActiveMembersUseCase getActiveMembersUseCase;
-    private final GetByIdMemberUseCase getByIdMemberUseCase;
+    private final GetMemberUseCase getMemberUseCase;
 
     // 이미 차단한 회원이면 그대로 성공으로 응답한다
     @Override
@@ -45,8 +45,8 @@ public class BlockService implements BlockMemberUseCase,
         if (blockerId.equals(targetId)) {
             throw new CustomException(BlockStatusCode.CANNOT_BLOCK_SELF);
         }
-        getByIdMemberUseCase.getById(blockerId);
-        getByIdMemberUseCase.getById(targetId);
+        getMemberUseCase.getById(blockerId);
+        getMemberUseCase.getById(targetId);
         if (memberBlockPort.findByBlockerIdAndBlockedId(blockerId, targetId).isEmpty()) {
             memberBlockPort.save(MemberBlock.builder()
                     .blockerId(blockerId)

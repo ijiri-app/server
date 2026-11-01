@@ -72,7 +72,9 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # 서버에 runner 를 설치하고 저장소 변수 DEPLOY_ENABLED 를 true 로 두기 전까지는 건너뛴다
+    # (runner 가 없으면 작업이 대기하다 실패한다)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     # 서버에 설치한 runner (라벨 ijiri-server)
     runs-on: [self-hosted, ijiri-server]
     environment: production

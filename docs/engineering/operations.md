@@ -34,7 +34,8 @@ so integration tests give each request its own remote IP.
   migrations must stay compatible with the previous version (add first, drop or rename in a later release).
   `@Scheduled` jobs may run in both slots during the overlap, so they must stay idempotent.
 - CI/CD (`.github/workflows/ci-cd.yml`): pushes and PRs to `develop`/`main` run `./gradlew test`; pushes then
-  build and push `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy through the
+  build and push `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy (only when the repository variable
+  `DEPLOY_ENABLED` is `true`) through the
   self-hosted runner labeled `ijiri-server` on the server, which copies `docker-compose.yml`, `deploy.sh` and
   `nginx/default.conf` into the repository variable `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live)
   and runs `./deploy.sh sha-<commit>`. Roll back by running `./deploy.sh sha-<older commit>` in `DEPLOY_DIR`.

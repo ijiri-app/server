@@ -1,9 +1,9 @@
 package ijiri.ijiriserver.global.config;
 
+import ijiri.ijiriserver.global.handler.CustomAccessDeniedHandler;
+import ijiri.ijiriserver.global.handler.CustomAuthenticationEntryPoint;
 import ijiri.ijiriserver.global.jwt.JwtAuthenticationFilter;
 import ijiri.ijiriserver.global.security.AdminVerifier;
-import ijiri.ijiriserver.global.security.CustomAccessDeniedHandler;
-import ijiri.ijiriserver.global.security.CustomAuthenticationEntryPoint;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;

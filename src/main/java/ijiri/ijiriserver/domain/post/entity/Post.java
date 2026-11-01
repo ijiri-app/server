@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.post.entity;
 
 import ijiri.ijiriserver.domain.carmodel.entity.BuildStyle;
-import ijiri.ijiriserver.domain.ownedcar.dto.OwnedCarSnapshot;
+import ijiri.ijiriserver.domain.ownedcar.entity.OwnedCarSnapshot;
 import ijiri.ijiriserver.global.entity.BaseTimeEntity;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;

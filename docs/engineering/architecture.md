@@ -10,30 +10,17 @@ ijiri.ijiriserver
 ├── IjiriServerApplication        (@EnableJpaAuditing, @EnableScheduling live here)
 ├── domain
 │   ├── auth
-│   │   ├── common                shared by all providers
-│   │   │   ├── client            SocialTokenVerifier, SocialUnlinkClient (strategy interfaces)
-│   │   │   ├── dto/response      AuthResponse
-│   │   │   ├── exception         AuthStatusCode
-│   │   │   └── service           SocialUnlinkService (+ impl)
+│   │   ├── common                shared by all providers: SocialTokenVerifier, SocialUnlinkClient
+│   │   │                         (outbound ports), kakao and google under adapter/out/external,
+│   │   │                         AuthResponse, AuthStatusCode, SocialUnlinkService
 │   │   ├── email                 POST /auth/signup, /auth/login/email, /auth/logout,
 │   │   │   │                     /auth/password/reset/code, /auth/password/reset,
 │   │   │   │                     /auth/email/send-code, /auth/email/verify-code
 │   │   │   │                     (AuthController, EmailVerificationController)
-│   │   │   ├── client  controller  dto/request  entity  repository
-│   │   │   ├── scheduler  service  service/impl
 │   │   ├── oauth                 POST /auth/login (provider + token), OAuthController
-│   │   │   ├── controller  dto/request  service  service/impl
-│   │   ├── kakao                 client only: KakaoOAuthClient (verify), KakaoUnlinkClient
-│   │   ├── google                client only: GoogleOAuthClient (verify)
 │   │   └── token                 POST /auth/refresh (TokenController)
-│   │       ├── controller  dto/request  entity
-│   │       ├── repository  scheduler  service  service/impl
 │   ├── member                    GET/PATCH/DELETE /members/me, GET /members/{id}
-│   │   ├── controller  dto  dto/request  dto/response  entity  event  exception
-│   │   ├── repository  scheduler  service  service/impl
 │   ├── interestcar               GET/PUT /members/me/interest-cars
-│   │   ├── controller  dto/request  dto/response  entity  exception
-│   │   ├── repository  service  service/impl
 │   ├── carmodel                  GET /car-models, /car-models/{id}; model / generation / trim master
 │   │                             imported from resources/car-master/car_master.csv at startup
 │   │                             (insert-only); BuildStyle enum
@@ -54,12 +41,13 @@ ijiri.ijiriserver
     │                             HttpClientConfig (timeouts for external APIs),
     │                             JacksonConfig (LocalDateTime as ISO 8601 with +09:00)
     ├── entity                    BaseTimeEntity
-    ├── exception                 StatusCode, CommonStatusCode, CustomException, GlobalExceptionHandler,
-    │                             CustomErrorController (/error -> BaseResponse)
+    ├── data                      BaseResponse
+    ├── exception                 exception/CustomException, status_code/StatusCode, CommonStatusCode
+    ├── handler                   GlobalExceptionHandler, CustomErrorController (/error -> BaseResponse),
+    │                             401/403 handlers, BaseResponseWriter
     ├── jwt                       JwtProvider, JwtAuthenticationFilter, JwtCookieManager, SessionValidator
     ├── ratelimit                 RateLimiter (in-memory fixed window)
-    ├── response                  BaseResponse
-    ├── security                  401/403 handlers returning BaseResponse, AdminVerifier
+    ├── security                  AdminVerifier
     ├── storage                   ImageUrlResolver (image key <-> public URL)
     └── validation                @MaxUtf8Bytes
 ```
@@ -70,8 +58,8 @@ the car master data.
 Domain dependencies (no cycles): `post` -> `ownedcar`, `carmodel`, `interestcar`, `part`, `upload`, `block`,
 `member`; `wishlist` -> `post`, `member`; `report` -> `post`, `member`; `ownedcar`/`interestcar` -> `carmodel`,
 `member`. `upload`, `part`, `carmodel` depend on no other domain service. When a lower domain needs data from a
-higher one, it declares a small reader interface that the higher domain implements with a repository-only
-component (`MemberPostCounter`, `MemberWishCounter`, `OwnedCarPostCounter`, `PostWishReader`, implemented by
+higher one, it declares a small reader interface that the higher domain implements with a persistence
+adapter (`MemberPostCounter`, `MemberWishCounter`, `OwnedCarPostCounter`, `PostWishReader`, implemented by
 `PostCountProvider` and `WishCountProvider`); higher domains notify lower ones with events
 (`PostDeletedEvent`, `PostPartsRemovedEvent`). Shared value types used by several domains
 (e.g. `BuildStyle`) live in the lowest domain (`carmodel`). Within the `post` aggregate, `post_image` and
@@ -79,17 +67,37 @@ component (`MemberPostCounter`, `MemberWishCounter`, `OwnedCarPostCounter`, `Pos
 
 ## Package ownership
 
-- A domain package owns its `controller`, `service`, `service/impl`, `repository`, `entity`,
-  `dto/request`, `dto/response`, `exception`, and optionally `client`, `scheduler`, `event`.
-- Sub-features of a domain get their own sub-package (e.g. `auth/kakao`, `auth/token`).
-- DTOs are split into `dto/request` and `dto/response`. Internal transfer objects that are neither go in `dto`.
-- Service interfaces live in `service`; implementations live in `service/impl`.
+The server is a single application with a hexagonal structure inside each feature under `domain`:
+
+```
+domain/<feature>
+├── adapter
+│   ├── in/web/controller      HTTP
+│   ├── in/scheduler           scheduled jobs
+│   ├── out/persistence        XxxJpaRepository, XxxPersistenceAdapter, providers for other domains' ports
+│   └── out/external           external API, mail and storage clients
+├── application
+│   ├── data                   commands and results; data/request, data/response
+│   ├── port/in                XxxUseCase
+│   ├── port/out               XxxPort, client and reader interfaces
+│   └── service                XxxService (implements XxxUseCase)
+├── entity                     JPA entities, enums and value types
+├── event
+└── exception
+```
+
+- Dependencies point inward: `application` never imports `adapter`; `entity`, `event` and `exception` import
+  neither `application` nor `adapter`. Controllers and other domains depend on `port/in` use cases.
+- Services use outbound ports, never `XxxJpaRepository` or a concrete client. A port declares only the
+  methods in use. JPA entities double as the domain model; they are not mapped to separate classes.
+- Sub-features of a domain get their own sub-package (e.g. `auth/email`, `auth/token`).
 - `global` contains only cross-cutting infrastructure, never business logic.
 
 ## Design principles
 
-- **SRP**: external API calls in `client`, orchestration in `service`, HTTP mapping in `controller`.
-- **OCP**: add a social provider (e.g. Apple) with a new sub-package containing a `SocialTokenVerifier`
+- **SRP**: external API calls in `adapter/out/external`, orchestration in `application/service`, HTTP mapping in `controller`.
+- **OCP**: add a social provider (e.g. Apple) with a new package under
+  `auth/common/adapter/out/external` containing a `SocialTokenVerifier`
   (returns `MemberRegisterCommand`; plus `SocialUnlinkClient` if needed) and a `Provider` enum value;
   `OAuthService` picks it up automatically. Do not modify existing providers.
 - **Cross-domain cleanup** goes through member events; `member` never calls other domains' services
@@ -103,12 +111,14 @@ component (`MemberPostCounter`, `MemberWishCounter`, `OwnedCarPostCounter`, `Pos
   - `MemberPurgedEvent` (hard delete after 30 days): delete the member's data, including stored files.
     Listeners must be idempotent (a failure rolls back and retries).
 - **LSP**: implementations honor the interface contract (same exceptions, no surprises).
-- **DIP**: controllers and other services depend on interfaces, never on `*Impl`.
+- **DIP**: controllers and other services depend on `XxxUseCase` and ports, never on implementations.
 
 ### Service layer
 
-- Default shape: one `XxxService` interface + one `XxxServiceImpl` per domain / feature area.
-- Do not split simple CRUD into per-method use-case interfaces (`CreatePostUseCase`, ...) or split
-  interfaces just to "apply" ISP. This is a layered architecture; a controller depends on a single service.
+- Each inbound operation has its own `port/in` interface (`GetMyProfileUseCase`, `CreatePostUseCase`), and
+  callers inject only the use cases they call.
+- A service implements the related use cases of one responsibility. Split it by cohesion when it grows
+  (`PostCommandService` / `PostQueryService`; `MemberQueryService`, `MemberCommandService`,
+  `MemberLifecycleService`), not into one class per use case.
 - Introduce an abstraction only when multiple implementations exist or a client genuinely needs an
   isolated dependency (e.g. `SocialTokenVerifier`).

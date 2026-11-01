@@ -1,9 +1,10 @@
 # Coding conventions
 
 ## Naming
-- Service: `XxxService` / `XxxServiceImpl`. Controller: `XxxController` named after the feature.
-  Providers have no controllers; they only plug a `client` into `OAuthService`.
-- Client: `XxxOAuthClient` or `XxxClient` in `client`.
+- Use case: one `VerbNounUseCase` per operation, implemented by `XxxService`. Outbound: `XxxPort` / `XxxPersistenceAdapter`, `XxxJpaRepository`.
+  Controller: `XxxController` named after the feature.
+  Providers have no controllers; they only plug an `adapter/out/external` client into `OAuthService`.
+- Client: `XxxOAuthClient` or `XxxClient` in `adapter/out/external`.
 - Domain event: past-tense `XxxEvent` record in `event`.
 - DTO: Java `record`. Requests are `XxxRequest` per endpoint. Responses are **one per domain**
   (`AuthResponse`, `MemberResponse`, `InterestCarResponse`) with static factories per use

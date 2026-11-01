@@ -1,7 +1,7 @@
 package ijiri.ijiriserver.domain.auth;
 
 import com.jayway.jsonpath.JsonPath;
-import ijiri.ijiriserver.domain.auth.email.client.VerificationMailClient;
+import ijiri.ijiriserver.domain.auth.email.adapter.out.external.VerificationMailClient;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;

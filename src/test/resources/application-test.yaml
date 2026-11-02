@@ -1,10 +1,12 @@
-# 운영과 같은 PostgreSQL 을 Testcontainers 로 띄워(Docker 필요) 같은 Flyway 마이그레이션을 적용하고
-# ddl-auto validate 로 엔티티와 대조한다. .env 없이 돌도록 비밀 값은 더미를 쓴다
-spring:
-  datasource:
-    url: jdbc:tc:postgresql:17:///ijiri
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+# 운영과 같은 PostgreSQL 17 을 임베디드로 띄워(Docker 불필요, @AutoConfigureEmbeddedDatabase) 같은 Flyway
+# 마이그레이션을 적용하고 ddl-auto validate 로 엔티티와 대조한다. .env 없이 돌도록 비밀 값은 더미를 쓴다
+zonky:
+  test:
+    database:
+      provider: zonky
+      type: postgres
 
+spring:
   mail:
     username: test@ijiri.com
     password: test

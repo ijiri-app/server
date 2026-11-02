@@ -40,9 +40,13 @@ These are invariants. Do not change them without being asked, and keep this docu
   SHA-256 hash); sign-up consumes it in the same transaction that creates the member and signs in
   (`isNewMember = true`, 200). For an already registered (or withdrawn) email `send-code` answers the same
   204 and only a notice mail is sent (no account enumeration; the app says "메일이 안 오면 이미 가입된 이메일일
-  수 있어요").
+  수 있어요"); the code row is still created with a code nobody receives, so the resend cooldown and
+  `verify-code` (`remainingAttempts`) behave exactly as for a new email. Every mail (code or notice) is sent on the
+  application task executor after the response, so response time does not depend on which mail, if any, goes out;
+  a failed send is logged and deletes the row so the user can request a new code.
 - Sign-up requires the three consents (`agreements.age14/terms/privacy` all true) and a unique nickname
-  (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`).
+  (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`). When a concurrent sign-up slips past the checks, the
+  violated constraint decides between `NICKNAME_ALREADY_EXISTS` and `EMAIL_ALREADY_EXISTS`.
 - Email sign-in errors are always `INVALID_CREDENTIALS`. 5 failures per email (registered or not) within
   15 min lock that email until the window ends (423 `ACCOUNT_LOCKED` with `retryAfterSeconds`); success or
   password reset clears the count. The lock duration is still an open question in the spec.
@@ -51,9 +55,11 @@ These are invariants. Do not change them without being asked, and keep this docu
   across IPs; upload URLs 100 / h per member. Unknown-email sign-in still runs a BCrypt compare.
 - Password reset: `POST /auth/password/reset/code {email}` (204) -> `POST /auth/password/reset
   {email, code, newPassword}` (204). Same code rules as sign-up (purpose `RESET_PASSWORD`). For an email that
-  is not an active email member the code API still answers 204 and sends nothing. The code check commits its
-  attempt count on its own; a correct code is consumed, then the password change and deletion of all the
-  member's sessions run in one transaction.
+  is not an active email member the code API still answers 204 and sends nothing, but creates the code row all the
+  same so the cooldown and the `remainingAttempts` of `/auth/password/reset` do not reveal whether it is
+  registered (the mail, when there is one, also goes out after the response). The code check commits its attempt
+  count on its own; a correct code is consumed, then the password change and deletion of all the member's sessions
+  run in one transaction.
 - Suspension: `PATCH /admin/reports/{id}` with `SUSPEND_MEMBER` sets `member.suspended_until` and deletes the
   member's sessions; `TokenService.issue` rejects suspended members (`MEMBER_SUSPENDED`), covering every sign-in and
   refresh.
@@ -61,9 +67,11 @@ These are invariants. Do not change them without being asked, and keep this docu
   token's `role` claim. Admins sign up normally and get `role = ADMIN` set in the DB. Report processing
   records who (`resolved_by`), when and what. Hiding an already deleted post or suspending an already
   withdrawn member is a no-op, so such reports can still be closed with that action.
-- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`; with DB storage also
-  GET `/images/**` and PUT `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
-  detail also exclude posts of members in a block relation (either direction).
+- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`, `/members/{id}/posts`,
+  the Swagger UI and `/v3/api-docs/**` (served only outside `prod`, which disables springdoc), and `/error`;
+  with DB storage also GET `/images/**` and PUT `/uploads/files/**` (authenticated by the upload URL signature).
+  Every other path requires a valid access token. When authenticated, feed, post detail and member post lists also
+  exclude posts of members in a block relation (either direction).
 - Uploads: the app crops, resizes, strips location data, masks plates and converts to JPEG/WebP, then PUTs
   straight to storage; the server never receives the file in prod. `POST /uploads/images` returns per image a
   temporary `imageKey` (`tmp/posts/...`, `tmp/profiles/...`) and a 10-min presigned `uploadUrl` with the

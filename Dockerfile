@@ -1,9 +1,9 @@
-# 빌드: Gradle 로 실행 가능한 jar 를 만든다 (테스트는 CI/로컬에서 따로 돌린다. Testcontainers 는 빌드 안에서 못 돈다)
+# 빌드: Gradle 로 실행 가능한 jar 를 만든다 (테스트는 CI/로컬에서 따로 돌린다)
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 # 소스가 바뀌어도 의존성 레이어는 캐시되도록 빌드 스크립트를 먼저 복사한다
-COPY gradlew settings.gradle build.gradle ./
+COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle gradle
 RUN ./gradlew dependencies --no-daemon > /dev/null
 

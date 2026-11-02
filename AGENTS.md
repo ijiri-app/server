@@ -1,6 +1,6 @@
 # IjiriServer agent guide
 
-Spring Boot 3.5 / Java 21 / Gradle / PostgreSQL / Spring Data JPA / Spring Security (stateless JWT).
+Spring Boot 3.5 / Kotlin 2.4 on Java 21 / Gradle / PostgreSQL / Spring Data JPA / Spring Security (stateless JWT).
 Members sign up with email + password (SMTP email verification) or sign in with Kakao/Google
 SDK tokens, which the server verifies before issuing its own JWTs.
 
@@ -30,7 +30,7 @@ SDK tokens, which the server verifies before issuing its own JWTs.
 Read the relevant guide before editing that area:
 
 - `docs/engineering/architecture.md`: project structure, package ownership, domain boundaries, design.
-- `docs/engineering/coding-conventions.md`: naming, Java style, entities, schema, and API rules.
+- `docs/engineering/coding-conventions.md`: naming, Kotlin style, entities, schema, and API rules.
 - `docs/engineering/security-invariants.md`: authentication, authorization, token and account lifecycle.
 - `docs/engineering/operations.md`: profiles, test setup, commands, deploy, CI/CD, and operational limitations.
 - `docs/engineering/commit-convention.md`: commit message and commit planning rules.

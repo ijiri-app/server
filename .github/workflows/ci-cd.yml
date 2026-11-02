@@ -33,12 +33,13 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      # 기본값은 main 에서만 캐시를 저장해 develop 과 PR 이 캐시를 받지 못한다
+      # 기본값은 main 에서만 캐시를 저장한다. PR 도 저장해야 같은 PR 의 다음 push 가 테스트 의존성과
+      # 임베디드 PostgreSQL 바이너리를 다시 받지 않는다 (develop/main push 는 bootJar 만 돌려 테스트 의존성이 없다)
       - uses: gradle/actions/setup-gradle@v4
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
+          cache-read-only: false
 
-      # Testcontainers 가 러너의 Docker 로 PostgreSQL 을 띄운다
+      # 임베디드 PostgreSQL 로 돌아서 Docker 가 필요 없다
       - name: Test
         run: ./gradlew test
 

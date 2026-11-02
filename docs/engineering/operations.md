@@ -3,22 +3,24 @@
 ## Profiles and tests
 
 - Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
-  every secret required, no fallbacks, forwarded headers for client IP), `test` (Testcontainers
+  every secret required, no fallbacks, forwarded headers for client IP, springdoc disabled), `test` (embedded
   PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
-Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
-with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
-`@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc
-integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
+Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 as an embedded process (Zonky, no
+Docker) with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
+An in-memory database such as H2 cannot replace it: migrations and part search use `pg_trgm`
+(`word_similarity`, GIN trigram indexes). `@SpringBootTest` classes use `@ActiveProfiles("test")`,
+`@AutoConfigureEmbeddedDatabase` and `@Import(SynchronousTaskExecutorConfig::class)`, which runs the verification
+mail executor inline so a test can verify the mail mock right after the request. Auth/security changes are covered by
+MockMvc integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
 `CommunityFlowIntegrationTest`); extend them when changing
 `SecurityConfig` paths or the auth flow. Rate limits are in memory and shared across tests in one context,
 so integration tests give each request its own remote IP.
 
 ## Commands
 
-- Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
-  CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
+- Build & test: `./gradlew test` (no Docker, local DB or `.env` needed).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)
 - Deploy: `cp .env.example .env`, fill it, then `./deploy.sh <image tag>` (e.g. `sha-<commit>`). Compose runs
   PostgreSQL 17 with pgvector, two app slots `app-blue` / `app-green` (compose profiles, so a plain
@@ -33,7 +35,8 @@ so integration tests give each request its own remote IP.
 - Blue/green runs old and new versions side by side for a moment and both apply to the same DB: Flyway
   migrations must stay compatible with the previous version (add first, drop or rename in a later release).
   `@Scheduled` jobs may run in both slots during the overlap, so they must stay idempotent.
-- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test`. Pushes skip tests
+- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test` and also save the Gradle
+  cache (scoped to that PR, so later pushes to it reuse dependencies). Pushes skip tests
   and docs-only changes, build the jar with the Gradle cache, then build (`--target ci`) and push
   `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy (only when the repository
   variable `DEPLOY_ENABLED` is `true`) through the
@@ -45,9 +48,12 @@ so integration tests give each request its own remote IP.
 
 Not problems today; revisit when the deployment changes.
 
-- `RateLimiter`, the sign-in lock and the silent reset-code cooldown are in memory: with several instances each counts
-  separately. Move them to Redis when scaling out.
+- `RateLimiter` and the sign-in lock are in memory: with several instances each counts separately. Move them to
+  Redis when scaling out.
 - Every authenticated request looks up `session_id` once; add a cache if traffic grows.
+- Verification mails go out on `applicationTaskExecutor` (Spring Boot default: 8 threads, unbounded queue). Shutdown
+  waits up to 10 s for sends in flight (`spring.task.execution.shutdown`), within the compose `stop_grace_period`
+  of 40 s.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
   Check against the actual deployment.

@@ -3,7 +3,7 @@
 ## Profiles and tests
 
 - Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
-  every secret required, no fallbacks, forwarded headers for client IP), `test` (embedded
+  every secret required, no fallbacks, forwarded headers for client IP, springdoc disabled), `test` (embedded
   PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
@@ -47,8 +47,8 @@ so integration tests give each request its own remote IP.
 
 Not problems today; revisit when the deployment changes.
 
-- `RateLimiter`, the sign-in lock and the silent reset-code cooldown are in memory: with several instances each counts
-  separately. Move them to Redis when scaling out.
+- `RateLimiter` and the sign-in lock are in memory: with several instances each counts separately. Move them to
+  Redis when scaling out.
 - Every authenticated request looks up `session_id` once; add a cache if traffic grows.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.

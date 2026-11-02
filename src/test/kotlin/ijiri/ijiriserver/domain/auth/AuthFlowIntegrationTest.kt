@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.domain.auth
 
 import com.jayway.jsonpath.JsonPath
+import ijiri.ijiriserver.SynchronousTaskExecutorConfig
 import ijiri.ijiriserver.domain.auth.email.adapter.out.external.VerificationMailClient
 import io.zonky.test.db.AutoConfigureEmbeddedDatabase
 import jakarta.servlet.http.Cookie
@@ -14,6 +15,7 @@ import org.mockito.kotlin.verify
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
+import org.springframework.context.annotation.Import
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.jdbc.core.JdbcTemplate
@@ -40,6 +42,7 @@ import java.util.concurrent.atomic.AtomicInteger
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @AutoConfigureEmbeddedDatabase
+@Import(SynchronousTaskExecutorConfig::class)
 class AuthFlowIntegrationTest {
 
     @Autowired

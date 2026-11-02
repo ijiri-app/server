@@ -48,6 +48,9 @@ dependencies {
     testImplementation("io.zonky.test:embedded-database-spring-test:2.8.0")
     testImplementation("io.zonky.test:embedded-postgres:2.2.2")
     testImplementation(platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:17.11.0"))
+    // 기본은 amd64 바이너리만 들어 있어 Apple Silicon 과 ARM 리눅스에서는 에뮬레이션으로 돈다
+    testRuntimeOnly("io.zonky.test.postgres:embedded-postgres-binaries-darwin-arm64v8")
+    testRuntimeOnly("io.zonky.test.postgres:embedded-postgres-binaries-linux-arm64v8")
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

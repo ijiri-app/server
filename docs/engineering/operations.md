@@ -34,7 +34,8 @@ so integration tests give each request its own remote IP.
 - Blue/green runs old and new versions side by side for a moment and both apply to the same DB: Flyway
   migrations must stay compatible with the previous version (add first, drop or rename in a later release).
   `@Scheduled` jobs may run in both slots during the overlap, so they must stay idempotent.
-- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test`. Pushes skip tests
+- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test` and also save the Gradle
+  cache (scoped to that PR, so later pushes to it reuse dependencies). Pushes skip tests
   and docs-only changes, build the jar with the Gradle cache, then build (`--target ci`) and push
   `ghcr.io/ijiri-app/server:<branch>` and `:sha-<commit>`; pushes to `main` deploy (only when the repository
   variable `DEPLOY_ENABLED` is `true`) through the

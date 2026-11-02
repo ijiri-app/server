@@ -13,7 +13,7 @@ class ImageUrlResolver(
     @Value("\${storage.public-base-url}") publicBaseUrl: String,
 ) {
 
-    private val urlPrefix: String = "$publicBaseUrl/"
+    private val urlPrefix: String = publicBaseUrl.trimEnd('/') + "/"
 
     fun urlOf(imageKey: String): String = urlPrefix + imageKey
 

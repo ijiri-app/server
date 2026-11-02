@@ -28,7 +28,7 @@ import javax.crypto.spec.SecretKeySpec
 class DbImageStorageClient(
     private val imageFilePort: ImageFilePort,
     transactionManager: PlatformTransactionManager,
-    @Value("\${storage.db.server-url}") private val serverUrl: String,
+    @Value("\${storage.db.server-url}") serverUrl: String,
     @Value("\${jwt.secret}") secret: String,
     private val clock: Clock,
 ) : ImageStorageClient, DbImageStoragePort {
@@ -37,11 +37,12 @@ class DbImageStorageClient(
     private val newTransaction = TransactionTemplate(transactionManager).apply {
         propagationBehavior = TransactionDefinition.PROPAGATION_REQUIRES_NEW
     }
+    private val uploadUrlPrefix = serverUrl.trimEnd('/') + UPLOAD_PATH
     private val signingKey = (SIGNING_CONTEXT + secret).toByteArray(Charsets.UTF_8)
 
     override fun createUploadUrl(imageKey: String, contentType: String, validity: Duration): String {
         val expires = clock.instant().plus(validity).epochSecond
-        return serverUrl + UPLOAD_PATH + imageKey +
+        return uploadUrlPrefix + imageKey +
             "?expires=" + expires +
             "&signature=" + sign(imageKey, contentType, expires)
     }

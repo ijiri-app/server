@@ -39,19 +39,17 @@ class EmailVerificationService(
     SendResetCodeUseCase,
     ConsumeResetCodeUseCase {
 
-    // 가입된 이메일도 응답(성공/재발송 대기)은 미가입 이메일과 똑같이 두고 안내 메일만 보내 가입 여부가 드러나지 않게 한다
+    // 가입된 이메일도 코드 행은 똑같이 만들되 코드 대신 안내 메일을 보낸다. 응답, 재발송 대기, 코드 확인의 남은 횟수까지
+    // 미가입 이메일과 같아서 가입 여부가 드러나지 않는다
     override fun sendSignupCode(email: String) {
         val registered = findEmailMemberUseCase.findEmailMember(email)
-        if (registered != null) {
-            acquireNoticeCooldown(email, VerificationPurpose.SIGNUP)
-            if (registered.isWithdrawn()) {
-                verificationMailPort.sendWithdrawnAccount(email)
-            } else {
-                verificationMailPort.sendAlreadyRegistered(email)
+        sendCode(email, VerificationPurpose.SIGNUP) { code ->
+            when {
+                registered == null -> verificationMailPort.sendCode(email, code, CODE_VALID_MINUTES)
+                registered.isWithdrawn() -> verificationMailPort.sendWithdrawnAccount(email)
+                else -> verificationMailPort.sendAlreadyRegistered(email)
             }
-            return
         }
-        sendCode(email, VerificationPurpose.SIGNUP)
     }
 
     // 틀린 시도도 횟수가 남아야 하므로 noRollbackFor 로 예외가 나도 attemptCount 증가분은 커밋한다
@@ -77,14 +75,16 @@ class EmailVerificationService(
         }
     }
 
-    // 가입 여부가 드러나지 않도록 활성 이메일 회원이 아니어도 같은 응답(재발송 대기 포함)을 주고 메일만 보내지 않는다
+    // 활성 이메일 회원이 아니어도 코드 행은 똑같이 만들고 메일만 보내지 않는다. 응답, 재발송 대기, 재설정의 남은 횟수가
+    // 회원과 같아서 가입 여부가 드러나지 않는다
     override fun sendResetCode(email: String) {
         val member = findEmailMemberUseCase.findEmailMember(email)
-        if (member == null || member.isWithdrawn()) {
-            acquireNoticeCooldown(email, VerificationPurpose.RESET_PASSWORD)
-            return
+        val active = member != null && !member.isWithdrawn()
+        sendCode(email, VerificationPurpose.RESET_PASSWORD) { code ->
+            if (active) {
+                verificationMailPort.sendCode(email, code, CODE_VALID_MINUTES)
+            }
         }
-        sendCode(email, VerificationPurpose.RESET_PASSWORD)
     }
 
     @Transactional(noRollbackFor = [CustomException::class])
@@ -98,13 +98,13 @@ class EmailVerificationService(
         emailVerificationPort.delete(verification)
     }
 
-    // 메일 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
-    private fun sendCode(email: String, purpose: VerificationPurpose) {
+    // 코드 행을 저장한 뒤 send 로 메일을 보낸다. 발송은 트랜잭션 밖에서 해 SMTP 응답을 기다리는 동안 DB 커넥션을 잡지 않는다
+    private fun sendCode(email: String, purpose: VerificationPurpose, send: (code: String) -> Unit) {
         val code = generateCode()
         val saved = transactionTemplate.execute { saveCode(email, purpose, code) }!!
         // 발송에 실패하면 받지 못한 코드가 남아 재발송 대기에 걸리지 않도록 지운다
         try {
-            verificationMailPort.sendCode(email, code, CODE_VALID_MINUTES)
+            send(code)
         } catch (e: CustomException) {
             emailVerificationPort.delete(saved)
             throw e
@@ -132,14 +132,6 @@ class EmailVerificationService(
             throw invalidCode(verification.remainingAttempts(MAX_ATTEMPTS))
         }
         return verification
-    }
-
-    // 코드를 발송하지 않는 경우에도 실제 발송과 같은 재발송 대기·같은 에러를 적용한다
-    private fun acquireNoticeCooldown(email: String, purpose: VerificationPurpose) {
-        val key = "$NOTICE_KEY_PREFIX$purpose:$email"
-        if (!rateLimiter.tryAcquire(key, 1, Duration.ofSeconds(RESEND_COOLDOWN_SECONDS))) {
-            throw resendTooSoon(rateLimiter.retryAfterSeconds(key))
-        }
     }
 
     // 기존 행은 잠근 뒤 재발송 대기를 확인하고 갱신한다.
@@ -202,7 +194,6 @@ class EmailVerificationService(
         private const val CODE_CHARACTERS = "0123456789"
         private const val TOKEN_PREFIX = "vt_"
         private val RANDOM = SecureRandom()
-        private const val NOTICE_KEY_PREFIX = "verification:notice:"
         // 코드당 5번 + 1분마다 재발송이면 IP 를 바꿔 가며 6자리 코드를 계속 맞혀 볼 수 있으므로 이메일별 하루 시도 수를 묶는다
         private const val ATTEMPT_KEY_PREFIX = "verification:attempt:"
         private const val MAX_ATTEMPTS_PER_DAY = 10

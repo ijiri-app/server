@@ -16,6 +16,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
+import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
@@ -43,6 +44,9 @@ class AuthFlowIntegrationTest {
 
     @Autowired
     lateinit var mockMvc: MockMvc
+
+    @Autowired
+    lateinit var jdbcTemplate: JdbcTemplate
 
     @MockitoBean
     lateinit var verificationMailClient: VerificationMailClient
@@ -81,6 +85,34 @@ class AuthFlowIntegrationTest {
 
         verify(verificationMailClient).sendAlreadyRegistered(email)
         verify(verificationMailClient, times(1)).sendCode(eq(email), any(), any())
+    }
+
+    @Test
+    fun 가입된_이메일도_틀린_가입_코드에_같은_남은_횟수를_주어_가입_여부가_드러나지_않는다() {
+        val email = newEmail()
+        signup(email)
+        postJson("/auth/email/send-code", "{\"email\":\"$email\"}").andExpect(status().isNoContent())
+
+        postJson("/auth/email/verify-code", "{\"email\":\"$email\",\"code\":\"${wrongCode(email, "SIGNUP")}\"}")
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_CODE"))
+            .andExpect(jsonPath("$.result.remainingAttempts").value(4))
+        verify(verificationMailClient, times(1)).sendCode(eq(email), any(), any())
+    }
+
+    @Test
+    fun 가입하지_않은_이메일도_틀린_재설정_코드에_같은_남은_횟수를_준다() {
+        val email = newEmail()
+        postJson("/auth/password/reset/code", "{\"email\":\"$email\"}").andExpect(status().isNoContent())
+
+        postJson(
+            "/auth/password/reset",
+            "{\"email\":\"$email\",\"code\":\"${wrongCode(email, "RESET_PASSWORD")}\",\"newPassword\":\"newpass123\"}",
+        )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("INVALID_VERIFICATION_CODE"))
+            .andExpect(jsonPath("$.result.remainingAttempts").value(4))
+        verify(verificationMailClient, never()).sendCode(eq(email), any(), any())
     }
 
     @Test
@@ -298,6 +330,17 @@ class AuthFlowIntegrationTest {
             "{\"email\":\"$email\",\"code\":\"${sentCode(email, sentCount)}\"}",
         ).andExpect(status().isOk()).andReturn().response.contentAsString
         return JsonPath.read(json, "$.result.verificationToken")
+    }
+
+    // 보내지 않은 코드는 DB 에서 읽어 그와 다른 값을 만든다
+    private fun wrongCode(email: String, purpose: String): String {
+        val code = jdbcTemplate.queryForObject(
+            "SELECT code FROM email_verification WHERE email = ? AND purpose = ?",
+            String::class.java,
+            email,
+            purpose,
+        )
+        return if (code == "000000") "111111" else "000000"
     }
 
     private fun sentCode(email: String, sentCount: Int): String {

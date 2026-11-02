@@ -3,15 +3,15 @@
 ## Profiles and tests
 
 - Profiles: `local` (default; show-sql, dev JWT secret fallback), `prod` (`SPRING_PROFILES_ACTIVE=prod`;
-  every secret required, no fallbacks, forwarded headers for client IP), `test` (Testcontainers
+  every secret required, no fallbacks, forwarded headers for client IP), `test` (embedded
   PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
-Test code (`src/test`) is kept locally and is not committed (`.gitignore`), so CI has no tests to run.
-
-Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
-with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
-`@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc
+Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 as an embedded process (Zonky, no
+Docker) with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
+An in-memory database such as H2 cannot replace it: migrations and part search use `pg_trgm`
+(`word_similarity`, GIN trigram indexes). `@SpringBootTest` classes use `@ActiveProfiles("test")` and
+`@AutoConfigureEmbeddedDatabase`. Auth/security changes are covered by MockMvc
 integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
 `CommunityFlowIntegrationTest`); extend them when changing
 `SecurityConfig` paths or the auth flow. Rate limits are in memory and shared across tests in one context,
@@ -19,8 +19,7 @@ so integration tests give each request its own remote IP.
 
 ## Commands
 
-- Build & test: `./gradlew test` (Docker must be running; no local DB or `.env` needed).
-  CI must use a runner with Docker (e.g. GitHub Actions `ubuntu-latest`).
+- Build & test: `./gradlew test` (no Docker, local DB or `.env` needed).
 - Run: `./gradlew bootRun` (requires `.env` with DB settings)
 - Deploy: `cp .env.example .env`, fill it, then `./deploy.sh <image tag>` (e.g. `sha-<commit>`). Compose runs
   PostgreSQL 17 with pgvector, two app slots `app-blue` / `app-green` (compose profiles, so a plain

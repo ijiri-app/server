@@ -44,9 +44,10 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.security:spring-security-test")
-    testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
+    // 테스트 DB: Docker 없이 프로세스로 띄우는 PostgreSQL (운영과 같은 17, pg_trgm 포함)
+    testImplementation("io.zonky.test:embedded-database-spring-test:2.8.0")
+    testImplementation("io.zonky.test:embedded-postgres:2.2.2")
+    testImplementation(platform("io.zonky.test.postgres:embedded-postgres-binaries-bom:17.11.0"))
     testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }

@@ -1,4 +1,4 @@
-# 빌드: Gradle 로 실행 가능한 jar 를 만든다 (테스트는 CI/로컬에서 따로 돌린다. Testcontainers 는 빌드 안에서 못 돈다)
+# 빌드: Gradle 로 실행 가능한 jar 를 만든다 (테스트는 CI/로컬에서 따로 돌린다)
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 

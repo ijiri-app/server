@@ -38,7 +38,7 @@ jobs:
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 
-      # Testcontainers 가 러너의 Docker 로 PostgreSQL 을 띄운다
+      # 임베디드 PostgreSQL 로 돌아서 Docker 가 필요 없다
       - name: Test
         run: ./gradlew test
 

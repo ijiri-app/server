@@ -27,7 +27,8 @@ class TokenServiceTest {
 
     private val refreshTokenPort: RefreshTokenPort = mock()
     private val findActiveMemberUseCase: FindActiveMemberUseCase = mock()
-    private val jwtProvider = JwtProvider(SECRET, 3600, 2419200)
+    private val clock: Clock = Clock.fixed(Instant.now(), ZoneOffset.UTC)
+    private val jwtProvider = JwtProvider(SECRET, 3600, 2419200, clock)
     private lateinit var tokenService: TokenService
 
     @BeforeEach
@@ -36,7 +37,7 @@ class TokenServiceTest {
             refreshTokenPort,
             findActiveMemberUseCase,
             jwtProvider,
-            Clock.fixed(Instant.now(), ZoneOffset.UTC),
+            clock,
         )
     }
 

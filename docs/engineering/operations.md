@@ -10,9 +10,10 @@
 Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 as an embedded process (Zonky, no
 Docker) with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
 An in-memory database such as H2 cannot replace it: migrations and part search use `pg_trgm`
-(`word_similarity`, GIN trigram indexes). `@SpringBootTest` classes use `@ActiveProfiles("test")` and
-`@AutoConfigureEmbeddedDatabase`. Auth/security changes are covered by MockMvc
-integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
+(`word_similarity`, GIN trigram indexes). `@SpringBootTest` classes use `@ActiveProfiles("test")`,
+`@AutoConfigureEmbeddedDatabase` and `@Import(SynchronousTaskExecutorConfig::class)`, which runs the verification
+mail executor inline so a test can verify the mail mock right after the request. Auth/security changes are covered by
+MockMvc integration tests through the real filter chain (`AuthFlowIntegrationTest`; community features in
 `CommunityFlowIntegrationTest`); extend them when changing
 `SecurityConfig` paths or the auth flow. Rate limits are in memory and shared across tests in one context,
 so integration tests give each request its own remote IP.
@@ -50,6 +51,9 @@ Not problems today; revisit when the deployment changes.
 - `RateLimiter` and the sign-in lock are in memory: with several instances each counts separately. Move them to
   Redis when scaling out.
 - Every authenticated request looks up `session_id` once; add a cache if traffic grows.
+- Verification mails go out on `applicationTaskExecutor` (Spring Boot default: 8 threads, unbounded queue). Shutdown
+  waits up to 10 s for sends in flight (`spring.task.execution.shutdown`), within the compose `stop_grace_period`
+  of 40 s.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. If the
   load balancer IP is outside them, every request looks like the LB IP and per-IP limits hit all users.
   Check against the actual deployment.

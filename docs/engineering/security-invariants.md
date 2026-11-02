@@ -41,7 +41,9 @@ These are invariants. Do not change them without being asked, and keep this docu
   (`isNewMember = true`, 200). For an already registered (or withdrawn) email `send-code` answers the same
   204 and only a notice mail is sent (no account enumeration; the app says "메일이 안 오면 이미 가입된 이메일일
   수 있어요"); the code row is still created with a code nobody receives, so the resend cooldown and
-  `verify-code` (`remainingAttempts`) behave exactly as for a new email.
+  `verify-code` (`remainingAttempts`) behave exactly as for a new email. Every mail (code or notice) is sent on the
+  application task executor after the response, so response time does not depend on which mail, if any, goes out;
+  a failed send is logged and deletes the row so the user can request a new code.
 - Sign-up requires the three consents (`agreements.age14/terms/privacy` all true) and a unique nickname
   (`member.nickname` is unique; `NICKNAME_ALREADY_EXISTS`). When a concurrent sign-up slips past the checks, the
   violated constraint decides between `NICKNAME_ALREADY_EXISTS` and `EMAIL_ALREADY_EXISTS`.
@@ -55,8 +57,9 @@ These are invariants. Do not change them without being asked, and keep this docu
   {email, code, newPassword}` (204). Same code rules as sign-up (purpose `RESET_PASSWORD`). For an email that
   is not an active email member the code API still answers 204 and sends nothing, but creates the code row all the
   same so the cooldown and the `remainingAttempts` of `/auth/password/reset` do not reveal whether it is
-  registered. The code check commits its attempt count on its own; a correct code is consumed, then the password
-  change and deletion of all the member's sessions run in one transaction.
+  registered (the mail, when there is one, also goes out after the response). The code check commits its attempt
+  count on its own; a correct code is consumed, then the password change and deletion of all the member's sessions
+  run in one transaction.
 - Suspension: `PATCH /admin/reports/{id}` with `SUSPEND_MEMBER` sets `member.suspended_until` and deletes the
   member's sessions; `TokenService.issue` rejects suspended members (`MEMBER_SUSPENDED`), covering every sign-in and
   refresh.

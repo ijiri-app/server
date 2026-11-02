@@ -10,6 +10,6 @@
   Keep each command on one line.
 
 ```bash
-git add -A src/main/java/ijiri/ijiriserver/domain/auth/token
+git add -A src/main/kotlin/ijiri/ijiriserver/domain/auth/token
 git commit -m "refactor: move RefreshTokenServiceImpl to service/impl"
 ```

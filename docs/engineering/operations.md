@@ -7,6 +7,8 @@
   PostgreSQL, tests only).
   All profiles run Flyway and `ddl-auto: validate`.
 
+Test code (`src/test`) is kept locally and is not committed (`.gitignore`), so CI has no tests to run.
+
 Tests: `src/test/resources/application-test.yaml` runs PostgreSQL 17 via Testcontainers (Docker required)
 with the same Flyway migrations, plus dummy secrets, so `./gradlew test` needs no local database or `.env`.
 `@SpringBootTest` classes use `@ActiveProfiles("test")`. Auth/security changes are covered by MockMvc

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Pattern
+import jakarta.validation.constraints.Size
 import java.util.Locale
 
 class VerificationCodeConfirmRequest(
@@ -17,5 +18,6 @@ class VerificationCodeConfirmRequest(
     @Schema(description = "인증 코드를 받은 이메일", example = "user@ijiri.com")
     @field:NotBlank
     @field:Email
+    @field:Size(max = 255)
     val email: String? = email?.trim()?.lowercase(Locale.ROOT)
 }

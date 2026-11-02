@@ -3,6 +3,7 @@ package ijiri.ijiriserver.domain.auth.email.application.data.request
 import io.swagger.v3.oas.annotations.media.Schema
 import jakarta.validation.constraints.Email
 import jakarta.validation.constraints.NotBlank
+import jakarta.validation.constraints.Size
 import java.util.Locale
 
 /**
@@ -16,5 +17,6 @@ class VerificationCodeSendRequest(
     @Schema(description = "이메일", example = "user@ijiri.com")
     @field:NotBlank
     @field:Email
+    @field:Size(max = 255)
     val email: String? = email?.trim()?.lowercase(Locale.ROOT)
 }

@@ -28,5 +28,6 @@ class PasswordResetRequest(
     @Schema(description = "이메일", example = "user@ijiri.com")
     @field:NotBlank
     @field:Email
+    @field:Size(max = 255)
     val email: String? = email?.trim()?.lowercase(Locale.ROOT)
 }

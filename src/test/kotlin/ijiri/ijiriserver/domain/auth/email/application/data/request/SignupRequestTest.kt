@@ -2,6 +2,7 @@ package ijiri.ijiriserver.domain.auth.email.application.data.request
 
 import jakarta.validation.Validation
 import jakarta.validation.Validator
+import jakarta.validation.constraints.Size
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -30,9 +31,19 @@ class SignupRequestTest {
             .anyMatch { violation -> violation.propertyPath.toString() == "nickname" }
     }
 
-    private fun request(password: String, nickname: String): SignupRequest =
+    @Test
+    fun 이메일이_255자를_넘으면_형식이_맞아도_거부한다() {
+        val email = "a".repeat(64) + "@" + ("b".repeat(63) + ".").repeat(3) + "com"
+
+        assertThat(validator.validate(request("abcd1234", "이지리", email)))
+            .anyMatch { violation ->
+                violation.propertyPath.toString() == "email" && violation.constraintDescriptor.annotation is Size
+            }
+    }
+
+    private fun request(password: String, nickname: String, email: String = "user@ijiri.com"): SignupRequest =
         SignupRequest(
-            "user@ijiri.com",
+            email,
             password,
             nickname,
             "vt_token",

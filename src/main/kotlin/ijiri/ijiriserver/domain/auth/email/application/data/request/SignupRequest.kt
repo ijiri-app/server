@@ -38,6 +38,7 @@ class SignupRequest(
     @Schema(description = "인증을 마친 이메일 (로그인 ID)", example = "user@ijiri.com")
     @field:NotBlank
     @field:Email
+    @field:Size(max = 255)
     val email: String? = email?.trim()?.lowercase(Locale.ROOT)
 
     @Schema(description = "닉네임 (2~12자, 중복 불가)", example = "이지리")

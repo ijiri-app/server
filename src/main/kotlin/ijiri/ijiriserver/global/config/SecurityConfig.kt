@@ -44,6 +44,7 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { a ->
                 a
+                    // Swagger 경로는 로컬·테스트 전용. 운영은 springdoc 을 꺼서(application-prod.yaml) 404 가 된다
                     .requestMatchers(
                         HttpMethod.GET,
                         "/swagger-ui/**",
@@ -59,9 +60,7 @@ class SecurityConfig(
                     // 업로드 URL 의 서명(만료 시각 포함)으로 인증한다. presigned URL 과 같은 방식
                     .requestMatchers(HttpMethod.PUT, "/uploads/files/**").permitAll()
                     .requestMatchers("/auth/**").permitAll()
-                    .requestMatchers(
-                        "/error",
-                    ).permitAll()
+                    .requestMatchers("/error").permitAll()
                     // 역할을 바꾸면 다시 로그인하지 않아도 바로 반영되도록 요청마다 DB 의 역할을 확인한다
                     .requestMatchers("/admin/**").access { authentication, _ ->
                         val current = authentication.get()

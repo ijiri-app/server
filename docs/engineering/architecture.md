@@ -103,7 +103,7 @@ domain/<feature>
 - **Cross-domain cleanup** goes through member events; `member` never calls other domains' services
   (no package cycles). `MemberSuspendedEvent` revokes sessions; `MemberProfileImageChangedEvent` lets `upload`
   verify the new profile image (exception rolls the change back) and delete the previous file.
-  - `MemberWithdrawnEvent` (soft delete): immediate actions (revoke tokens, social unlink, hide posts).
+  - `MemberWithdrawnEvent` (soft delete): immediate actions (revoke tokens, social unlink, hide posts and wishes).
     Bulk updates in these listeners must not clear the persistence context (`clearAutomatically`), or the
     member change in the same transaction is lost. External API calls listen with
     `@TransactionalEventListener(phase = AFTER_COMMIT)` so they never hold a DB connection; they catch and log failures, and anything that must eventually succeed is retried

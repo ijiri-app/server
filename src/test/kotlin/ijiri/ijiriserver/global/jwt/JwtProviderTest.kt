@@ -2,10 +2,18 @@ package ijiri.ijiriserver.global.jwt
 
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
+import java.time.Clock
+import java.time.Instant
+import java.time.ZoneOffset
 
 class JwtProviderTest {
 
-    private val jwtProvider = JwtProvider("test-secret-key-0123456789abcdef-0123456789", 3600, 60)
+    private val jwtProvider = JwtProvider(
+        "test-secret-key-0123456789abcdef-0123456789",
+        3600,
+        60,
+        Clock.fixed(Instant.parse("2026-01-01T00:00:00Z"), ZoneOffset.UTC),
+    )
 
     @Test
     fun access_token_은_한_번_파싱해서_세션과_회원을_꺼낸다() {

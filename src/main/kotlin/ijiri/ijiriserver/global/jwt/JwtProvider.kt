@@ -2,6 +2,7 @@ package ijiri.ijiriserver.global.jwt
 
 import io.jsonwebtoken.Claims
 import io.jsonwebtoken.JwtException
+import io.jsonwebtoken.JwtParser
 import io.jsonwebtoken.Jwts
 import io.jsonwebtoken.security.Keys
 import org.springframework.beans.factory.annotation.Value
@@ -10,6 +11,7 @@ import org.springframework.security.core.Authentication
 import org.springframework.security.core.authority.SimpleGrantedAuthority
 import org.springframework.stereotype.Component
 import java.nio.charset.StandardCharsets
+import java.time.Clock
 import java.util.Date
 import javax.crypto.SecretKey
 
@@ -18,14 +20,21 @@ class JwtProvider(
     @Value("\${jwt.secret}") secret: String,
     @Value("\${jwt.access-token-validity-seconds}") accessTokenValiditySeconds: Long,
     @Value("\${jwt.refresh-token-validity-seconds}") refreshTokenValiditySeconds: Long,
+    private val clock: Clock,
 ) {
 
     private val key: SecretKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
     private val accessTokenValidityMillis: Long = accessTokenValiditySeconds * 1000
     private val refreshTokenValidityMillis: Long = refreshTokenValiditySeconds * 1000
 
+    // 발급과 만료 검사가 같은 Clock 을 보도록 파서에도 넣는다. 파서는 불변이라 한 번만 만들어 재사용한다
+    private val parser: JwtParser = Jwts.parser()
+        .verifyWith(key)
+        .clock { Date.from(clock.instant()) }
+        .build()
+
     fun createAccessToken(subject: String, role: String, sessionId: String): String {
-        val now = Date()
+        val now = Date.from(clock.instant())
         return Jwts.builder()
             .subject(subject)
             .claim(ROLE_CLAIM, role)
@@ -38,7 +47,7 @@ class JwtProvider(
     }
 
     fun createRefreshToken(subject: String, sessionId: String): String {
-        val now = Date()
+        val now = Date.from(clock.instant())
         return Jwts.builder()
             .subject(subject)
             .id(sessionId)
@@ -78,8 +87,7 @@ class JwtProvider(
         )
     }
 
-    private fun parse(token: String): Claims =
-        Jwts.parser().verifyWith(key).build().parseSignedClaims(token).payload
+    private fun parse(token: String): Claims = parser.parseSignedClaims(token).payload
 
     companion object {
         private const val ROLE_CLAIM = "role"

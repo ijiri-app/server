@@ -21,7 +21,7 @@ import java.time.LocalDateTime
             name = "uk_member_provider_provider_member_id",
             columnNames = ["provider", "provider_member_id"],
         ),
-        UniqueConstraint(name = "uk_member_nickname", columnNames = ["nickname"]),
+        UniqueConstraint(name = Member.NICKNAME_UNIQUE_CONSTRAINT, columnNames = ["nickname"]),
     ],
     indexes = [Index(name = "idx_member_deleted_at", columnList = "deleted_at")],
 )
@@ -121,5 +121,10 @@ class Member(
 
     fun isWithdrawn(): Boolean {
         return deletedAt != null
+    }
+
+    companion object {
+        // 동시 가입 경합에서 어느 유니크 제약에 걸렸는지 구분한다 (MemberCommandService.signup)
+        const val NICKNAME_UNIQUE_CONSTRAINT = "uk_member_nickname"
     }
 }

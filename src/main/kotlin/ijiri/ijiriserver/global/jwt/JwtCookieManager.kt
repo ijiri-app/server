@@ -31,7 +31,7 @@ class JwtCookieManager(
 
     fun resolveAccessToken(request: HttpServletRequest): String? {
         val header: String? = request.getHeader(HttpHeaders.AUTHORIZATION)
-        if (header != null && StringUtils.hasText(header) && header.startsWith(BEARER_PREFIX)) {
+        if (header != null && header.startsWith(BEARER_PREFIX)) {
             return header.substring(BEARER_PREFIX.length)
         }
         return getCookie(request, ACCESS_TOKEN_COOKIE)

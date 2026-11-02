@@ -10,3 +10,10 @@ storage:
     access-key-id: ${R2_ACCESS_KEY_ID}
     secret-access-key: ${R2_SECRET_ACCESS_KEY}
     bucket: ${R2_BUCKET}
+
+# API 문서(Swagger UI, /v3/api-docs)는 로컬·테스트에서만 연다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

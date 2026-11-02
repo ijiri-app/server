@@ -44,6 +44,7 @@ class SecurityConfig(
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { a ->
                 a
+                    // Swagger 경로는 로컬·테스트 전용. 운영은 springdoc 을 꺼서(application-prod.yaml) 404 가 된다
                     .requestMatchers(
                         HttpMethod.GET,
                         "/swagger-ui/**",

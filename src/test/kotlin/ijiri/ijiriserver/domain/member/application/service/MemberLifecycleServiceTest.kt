@@ -1,6 +1,7 @@
 package ijiri.ijiriserver.domain.member.application.service
 
 import ijiri.ijiriserver.domain.member.application.data.MemberRegisterCommand
+import ijiri.ijiriserver.domain.member.application.data.MemberSignupCommand
 import ijiri.ijiriserver.domain.member.application.port.out.MemberPort
 import ijiri.ijiriserver.domain.member.application.port.out.MemberPostCounter
 import ijiri.ijiriserver.domain.member.application.port.out.MemberWishCounter
@@ -9,10 +10,12 @@ import ijiri.ijiriserver.domain.member.entity.Provider
 import ijiri.ijiriserver.domain.member.entity.Role
 import ijiri.ijiriserver.domain.member.event.MemberPurgedEvent
 import ijiri.ijiriserver.domain.member.event.MemberWithdrawnEvent
+import ijiri.ijiriserver.domain.member.exception.MemberStatusCode
 import ijiri.ijiriserver.global.exception.exception.CustomException
 import ijiri.ijiriserver.global.storage.ImageUrlResolver
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatThrownBy
+import org.hibernate.exception.ConstraintViolationException
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.mock
@@ -20,6 +23,8 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.context.ApplicationEventPublisher
+import org.springframework.dao.DataIntegrityViolationException
+import java.sql.SQLException
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDateTime
@@ -103,6 +108,21 @@ class MemberLifecycleServiceTest {
         )
 
         assertThat(result.member.nickname).matches("이지리오너\\d{6}")
+    }
+
+    @Test
+    fun 동시_가입_경합에서_닉네임_제약에_걸리면_닉네임_중복으로_응답한다() {
+        whenever(memberPort.saveAndFlush(any())).thenThrow(
+            DataIntegrityViolationException(
+                "duplicate",
+                ConstraintViolationException("duplicate", SQLException(), Member.NICKNAME_UNIQUE_CONSTRAINT),
+            ),
+        )
+
+        assertThatThrownBy { memberCommandService.signup(MemberSignupCommand("a@ijiri.com", "이지리", "encoded")) }
+            .isInstanceOfSatisfying(CustomException::class.java) { e ->
+                assertThat(e.statusCode).isEqualTo(MemberStatusCode.DUPLICATE_NICKNAME)
+            }
     }
 
     private fun kakaoMember(deletedAt: LocalDateTime?): Member =

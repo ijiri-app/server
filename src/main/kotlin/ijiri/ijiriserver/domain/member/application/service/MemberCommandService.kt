@@ -20,6 +20,7 @@ import ijiri.ijiriserver.domain.member.event.MemberProfileImageChangedEvent
 import ijiri.ijiriserver.domain.member.exception.MemberStatusCode
 import ijiri.ijiriserver.global.exception.exception.CustomException
 import ijiri.ijiriserver.global.storage.ImageUrlResolver
+import org.hibernate.exception.ConstraintViolationException
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
@@ -114,7 +115,17 @@ class MemberCommandService(
                 ),
             )
         } catch (e: DataIntegrityViolationException) {
-            throw CustomException(MemberStatusCode.DUPLICATE_EMAIL)
+            throw CustomException(duplicateOf(e))
+        }
+    }
+
+    // 사전 검사와 저장 사이에 같은 닉네임·이메일 가입이 먼저 끝나면 유니크 제약에 걸린다. 어느 제약인지로 코드를 고른다
+    private fun duplicateOf(e: DataIntegrityViolationException): MemberStatusCode {
+        val constraintName = (e.cause as? ConstraintViolationException)?.constraintName
+        return if (constraintName == Member.NICKNAME_UNIQUE_CONSTRAINT) {
+            MemberStatusCode.DUPLICATE_NICKNAME
+        } else {
+            MemberStatusCode.DUPLICATE_EMAIL
         }
     }
 

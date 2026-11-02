@@ -1,0 +1,10 @@
+server:
+  # nginx 뒤에서 X-Forwarded-For 로 실제 클라이언트 IP 를 얻는다 (요청 횟수 제한 키)
+  forward-headers-strategy: native
+
+# API 문서(Swagger UI, /v3/api-docs)는 로컬·테스트에서만 연다
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

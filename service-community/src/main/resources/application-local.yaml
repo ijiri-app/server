@@ -1,0 +1,20 @@
+spring:
+  jpa:
+    show-sql: true
+  # compose 의 db-community 가 호스트에 여는 포트
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/ijiri_community}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+# compose 의 nginx 내부 리스너(localhost:8090)를 거쳐 다른 서비스를 부른다
+services:
+  user:
+    url: ${USER_SERVICE_URL:http://localhost:8090/user}
+  car:
+    url: ${CAR_SERVICE_URL:http://localhost:8090/car}
+  media:
+    url: ${MEDIA_SERVICE_URL:http://localhost:8090/media}

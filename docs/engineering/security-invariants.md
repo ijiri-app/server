@@ -61,9 +61,10 @@ These are invariants. Do not change them without being asked, and keep this docu
   token's `role` claim. Admins sign up normally and get `role = ADMIN` set in the DB. Report processing
   records who (`resolved_by`), when and what. Hiding an already deleted post or suspending an already
   withdrawn member is a no-op, so such reports can still be closed with that action.
-- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`; with DB storage also
-  GET `/images/**` and PUT `/uploads/files/**` (authenticated by the upload URL signature). When authenticated, feed and post
-  detail also exclude posts of members in a block relation (either direction).
+- Public endpoints: all of `/auth/**`; GET `/car-models/**`, `/feed`, `/posts/{id}`, `/members/{id}/posts`,
+  the Swagger UI and `/v3/api-docs/**`, and `/error`; with DB storage also GET `/images/**` and PUT `/uploads/files/**`
+  (authenticated by the upload URL signature). Every other path requires a valid access token. When authenticated, feed,
+  post detail and member post lists also exclude posts of members in a block relation (either direction).
 - Uploads: the app crops, resizes, strips location data, masks plates and converts to JPEG/WebP, then PUTs
   straight to storage; the server never receives the file in prod. `POST /uploads/images` returns per image a
   temporary `imageKey` (`tmp/posts/...`, `tmp/profiles/...`) and a 10-min presigned `uploadUrl` with the

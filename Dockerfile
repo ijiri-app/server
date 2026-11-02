@@ -3,7 +3,7 @@ FROM eclipse-temurin:21-jdk AS build
 WORKDIR /workspace
 
 # 소스가 바뀌어도 의존성 레이어는 캐시되도록 빌드 스크립트를 먼저 복사한다
-COPY gradlew settings.gradle build.gradle ./
+COPY gradlew settings.gradle.kts build.gradle.kts ./
 COPY gradle gradle
 RUN ./gradlew dependencies --no-daemon > /dev/null
 

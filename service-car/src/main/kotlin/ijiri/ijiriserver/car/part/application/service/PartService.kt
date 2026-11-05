@@ -10,6 +10,7 @@ import ijiri.ijiriserver.car.part.application.port.`in`.SuggestPartsUseCase
 import ijiri.ijiriserver.car.part.application.port.out.BrandPort
 import ijiri.ijiriserver.car.part.application.port.out.PartCarModelUsagePort
 import ijiri.ijiriserver.car.part.application.port.out.PartPort
+import ijiri.ijiriserver.car.part.application.port.out.ProcessedMessagePort
 import ijiri.ijiriserver.car.part.entity.Brand
 import ijiri.ijiriserver.car.part.entity.Part
 import ijiri.ijiriserver.car.part.exception.PartStatusCode
@@ -31,6 +32,7 @@ class PartService(
     private val partPort: PartPort,
     private val brandPort: BrandPort,
     private val partCarModelUsagePort: PartCarModelUsagePort,
+    private val processedMessagePort: ProcessedMessagePort,
     private val clock: Clock,
 ) : SearchPartsUseCase,
     SuggestPartsUseCase,
@@ -94,8 +96,22 @@ class PartService(
         return toInfos(partPort.findAllById(partIds))
     }
 
+    // 기록과 사용 수 변경이 한 트랜잭션이라, 중간에 실패해 다시 받은 메시지는 처음부터 다시 센다
     @Transactional
-    override fun recordUsage(partIds: Collection<Long>, carModelId: Long, delta: Int) {
+    override fun recordUsage(
+        messageId: String?,
+        carModelId: Long,
+        addedPartIds: Set<Long>,
+        removedPartIds: Set<Long>,
+    ) {
+        if (messageId != null && !processedMessagePort.markProcessed(messageId, LocalDateTime.now(clock))) {
+            return
+        }
+        addUsage(addedPartIds, carModelId, 1)
+        addUsage(removedPartIds, carModelId, -1)
+    }
+
+    private fun addUsage(partIds: Collection<Long>, carModelId: Long, delta: Int) {
         if (partIds.isEmpty()) {
             return
         }

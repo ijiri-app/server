@@ -1,0 +1,25 @@
+# 운영과 같은 PostgreSQL 17 을 임베디드로 띄워(Docker 불필요, @AutoConfigureEmbeddedDatabase) 같은 Flyway
+# 마이그레이션을 적용하고 ddl-auto validate 로 엔티티와 대조한다.
+# Kafka 와 다른 서비스는 띄우지 않는다 (발행과 내부 호출은 테스트가 목으로 바꾼다)
+zonky:
+  test:
+    database:
+      provider: zonky
+      type: postgres
+
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+    listener:
+      auto-startup: false
+
+cors:
+  allowed-origins: http://localhost:3000
+
+services:
+  user:
+    url: http://localhost:1/user
+  car:
+    url: http://localhost:1/car
+  media:
+    url: http://localhost:1/media

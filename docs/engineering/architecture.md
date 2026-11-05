@@ -20,9 +20,11 @@ IjiriServer
 │   ├── entity                    BaseTimeEntity
 │   ├── exception                 CustomException, StatusCode, CommonStatusCode, RemoteStatusCode;
 │   │                             handler/: GlobalExceptionHandler, CustomErrorController, 401/403 handlers
-│   ├── internal                  InternalClient, InternalClientFactory (REST calls between services)
+│   ├── internal                  InternalClient, InternalClientFactory (REST calls between services,
+│   │                             one circuit breaker per service)
 │   ├── jwt                       JwtProvider, JwtCookieManager, SessionValidator (beans only in service-user)
-│   ├── messaging                 Topics, Kafka message classes, MessagePublisher (KafkaMessagePublisher)
+│   ├── messaging                 Topics, MessageHeader, Kafka message classes, KafkaErrorHandlerConfig (backoff, DLT),
+│   │                             MessagePublisher; outbox/: OutboxMessagePublisher, OutboxRelay
 │   ├── ratelimit                 RateLimiter (in-memory fixed window)
 │   ├── response                  BaseResponse
 │   ├── security                  GatewayHeaders, HeaderAuthenticationFilter, ServiceSecurityConfig
@@ -109,25 +111,36 @@ is not routed by the public nginx listener (404). Services reach each other thro
 (`http://nginx:81/<service>/internal/...`) so blue/green switches apply to internal calls too. `InternalClient`
 turns an error response into a `CustomException` with a `RemoteStatusCode` carrying the upstream HTTP status, code
 and message, so a caller answers with the same error (`INVALID_TRIM`, `INVALID_IMAGE`, `FORBIDDEN`, `NOT_FOUND`).
-Connection failures and 5xx become `SERVICE_UNAVAILABLE` (502).
+Connection failures and 5xx become `SERVICE_UNAVAILABLE` (502). Each target service has one circuit breaker
+(resilience4j, `InternalClientFactory`): when at least half of the last 20 calls (10 minimum) failed with
+`SERVICE_UNAVAILABLE`, calls answer `SERVICE_UNAVAILABLE` at once for 10 seconds, then 3 trial calls decide
+whether it closes. 4xx answers count as successes. The internal listener forwards only `/<service>/internal/**`
+(404 otherwise) and clears `X-Member-Id` / `X-Member-Role`.
 
 ### Events (Kafka)
 
 Messages are JSON strings keyed by the aggregate id. One listener per topic per service (the consumer group is
 the service name), so messages of one member or post are consumed in order. Consumers must be idempotent: a
-message is delivered at least once, and a failing listener is retried by Spring Kafka's default error handler
-and then skipped with a log.
+message is delivered at least once with a `message-id` header (`MessageHeader.ID`, a UUID per message). A failing
+listener is retried with exponential backoff (1 s doubling to 30 s, 6 retries, about a minute;
+`KafkaErrorHandlerConfig`), then moved to `<topic>.<consumer group>.DLT` (created by the broker on first use); a
+message whose JSON cannot be read goes there without retries. Nothing is skipped silently: watch and replay the
+DLT topics.
 
 - `member.withdrawn` (`MemberWithdrawnMessage`): community hides the member's posts and wishes.
 - `member.purged` (`MemberPurgedMessage`): community deletes wishes, posts (publishing `post.deleted` per post),
   blocks and reports; media deletes every upload record and file of the member.
 - `post.deleted` (`PostDeletedMessage` with image keys): media deletes the images.
-- `part.usage-changed` (`PartUsageChangedMessage`): car adjusts total and per-car-model use counts.
+- `part.usage-changed` (`PartUsageChangedMessage`): car adjusts total and per-car-model use counts. Counting is
+  not idempotent by itself, so car records each `message-id` in `processed_message` in the same transaction and
+  skips a message it has already counted.
 
-`service-user` publishes synchronously inside the withdrawal and purge transactions (the broker must acknowledge),
-so a broker outage rolls the operation back and the purge is retried by the next schedule. `service-community`
-publishes after commit (`TransactionHooks.afterCommit`), so a lost `post.deleted` leaves orphan files and a lost
-`part.usage-changed` drifts a ranking counter; both are logged.
+Publishers use a transactional outbox (`messaging.outbox.enabled: true` and an `outbox_message` table in
+service-user and service-community). `MessagePublisher.publish` must run inside a transaction and only inserts a
+row, so a message leaves if and only if the business change commits. `OutboxRelay` sends committed rows in id
+order every second, deletes what the broker acknowledged and stops at the first failure, so a broker outage only
+delays messages. Overlapping blue/green slots share the table through `FOR UPDATE SKIP LOCKED`; a crash between
+send and delete sends a message again (consumers are idempotent).
 
 ## Design principles
 

@@ -14,7 +14,10 @@ These are invariants. Do not change them without being asked, and keep this docu
   the client sent) and every service builds its authentication from them (`HeaderAuthenticationFilter`,
   `@AuthenticationPrincipal` = member id, `null` when the headers are absent). The services therefore trust the
   headers and must stay reachable only through nginx on the compose network (their ports are bound to the
-  host's localhost for deploy checks only).
+  host's localhost for deploy checks only). The nginx internal listener (port 81) forwards only
+  `/<service>/internal/**` and sends empty `X-Member-Id` / `X-Member-Role`, so the compose network cannot reach
+  public or admin APIs as a member through it. The public listener blocks `/internal/` with `^~`, so a regex
+  location added later cannot route it.
 - Authorization per service: `/internal/**`, `/error` and the API docs are `permitAll` (nginx returns 404 for
   `/internal/**` and prod disables the docs); each service lists its public paths in its `SecurityConfig`;
   `/admin/**` requires `X-Member-Role: ADMIN`; everything else requires `X-Member-Id`.
@@ -35,13 +38,13 @@ These are invariants. Do not change them without being asked, and keep this docu
   Withdrawal also expires the cookies.
 - Withdrawal (`DELETE /members/me`, 204) is a soft delete (`member.deleted_at`) that also clears
   `member.email`, revokes the sessions, and publishes `member.withdrawn`, which turns the member's posts
-  `AUTHOR_WITHDRAWN` and hides their wishes from wish counts in `service-community`. The Kafka send is
-  synchronous inside the withdrawal transaction, so a broker outage fails the request instead of leaving posts
-  visible. A withdrawn member cannot sign in or re-register with the same account for 30 days
+  `AUTHOR_WITHDRAWN` and hides their wishes from wish counts in `service-community`. The message is
+  written to the outbox in the withdrawal transaction and sent after commit, so it leaves only if the withdrawal
+  committed and a broker outage delays the hiding instead of failing the request. A withdrawn member cannot sign in or re-register with the same account for 30 days
   (`MEMBER_WITHDRAWN`); `getById` excludes withdrawn members (refresh is `INVALID_REFRESH_TOKEN`, not 404).
   `MemberPurgeScheduler` runs daily at 04:00, reads targets 100 at a time and hard-deletes one transaction per
   member: the social unlink listener runs first (`HIGHEST_PRECEDENCE`), then the service's own data (owned cars,
-  interest cars), then `member.purged` is published synchronously and the member row deleted. `service-community`
+  interest cars), then `member.purged` is written to the outbox and the member row deleted in the same transaction. `service-community`
   deletes wishes, posts with parts and tags (publishing `post.deleted` per post), blocks and reports;
   `service-media` deletes every upload record and file of the member. Consumers are idempotent. Kakao unlink runs
   after the withdrawal commit and is retried before the purge if it fails; once the purge is 3 days overdue

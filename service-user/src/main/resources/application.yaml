@@ -79,6 +79,11 @@ oauth:
     # Android/iOS/Web 클라이언트 ID 를 콤마로 구분해서 모두 넣는다 (ID token 의 aud 검증용)
     client-ids: ${GOOGLE_CLIENT_IDS}
 
+# 발행하는 메시지는 outbox_message 를 거쳐 커밋된 뒤에만 나간다 (OutboxMessagePublisher, OutboxRelay)
+messaging:
+  outbox:
+    enabled: true
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
 

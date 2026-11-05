@@ -42,6 +42,11 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
+# 발행하는 메시지는 outbox_message 를 거쳐 커밋된 뒤에만 나간다 (OutboxMessagePublisher, OutboxRelay)
+messaging:
+  outbox:
+    enabled: true
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
 

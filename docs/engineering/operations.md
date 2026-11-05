@@ -75,10 +75,12 @@ Not problems today; revisit when the deployment changes.
   target service runs; add a cache if traffic grows.
 - Internal calls go through the nginx internal listener, so a service is unreachable while nginx reloads or
   before the first deploy wrote `nginx/upstream.conf`. Callers answer `SERVICE_UNAVAILABLE` (502) meanwhile.
-- Kafka delivers at least once and a failing listener is retried by Spring Kafka's default error handler, then
-  skipped with a log. A skipped `member.purged` leaves community or media data of a purged member behind, a lost
-  `post.deleted` leaves files in storage, a repeated `part.usage-changed` drifts a ranking counter. Watch the
-  consumer logs; there is no dead-letter topic yet.
+- Kafka delivers at least once. A listener that still fails after about a minute of backoff moves the message to
+  `<topic>.<consumer group>.DLT` (e.g. `member.purged.service-media.DLT`). A message left there means a purged
+  member's data or files remain, so check the DLT topics after incidents
+  (`kafka-console-consumer.sh --topic <dlt> --from-beginning` in the kafka container) and replay them to the
+  original topic once the cause is fixed. Unsent messages wait in `outbox_message` (service-user,
+  service-community) while the broker is down; a growing table means the relay is failing.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. nginx and
   cloudflared are on the compose network, so the client IP arrives; check again if the proxies move.
 - Images: prod uses Cloudflare R2 (`storage.type = r2`, `R2_*` env) behind a custom domain

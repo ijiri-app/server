@@ -70,11 +70,12 @@ class CarFlowIntegrationTest {
         assertThat(first).isEqualTo(second)
 
         val carModelId = avanteNId()
-        repeat(2) {
-            partUsageConsumer.onPartUsageChanged(
-                objectMapper.writeValueAsString(PartUsageChangedMessage(carModelId, setOf(first), emptySet())),
-            )
-        }
+        val payload = objectMapper.writeValueAsString(PartUsageChangedMessage(carModelId, setOf(first), emptySet()))
+        val duplicatedId = UUID.randomUUID().toString().toByteArray()
+        // 두 메시지와, 다시 전달된(같은 message-id) 메시지 하나: 두 번만 센다
+        partUsageConsumer.onPartUsageChanged(payload, duplicatedId)
+        partUsageConsumer.onPartUsageChanged(payload, duplicatedId)
+        partUsageConsumer.onPartUsageChanged(payload, UUID.randomUUID().toString().toByteArray())
 
         mockMvc.perform(
             get("/parts").header(GatewayHeaders.MEMBER_ID, "1").param("q", name.replace("-", "").uppercase()),

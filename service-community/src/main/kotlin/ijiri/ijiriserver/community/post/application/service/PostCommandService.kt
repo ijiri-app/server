@@ -147,15 +147,12 @@ class PostCommandService(
         post.replaceParts(emptyList())
         postPort.flush()
         postPort.delete(post)
-        TransactionHooks.afterCommit { postEventPublisher.postDeleted(postId, imageKeys) }
+        postEventPublisher.postDeleted(postId, imageKeys)
     }
 
-    // 사용 수는 순위용 수치라 커밋 뒤에 보낸다. 롤백된 작성·수정은 세지 않는다
+    // outbox 에 같은 트랜잭션으로 쓰므로 롤백된 작성·수정은 세지 않는다
     private fun publishUsage(carModelId: Long, addedPartIds: Set<Long>, removedPartIds: Set<Long>) {
-        if (addedPartIds.isEmpty() && removedPartIds.isEmpty()) {
-            return
-        }
-        TransactionHooks.afterCommit { postEventPublisher.partUsageChanged(carModelId, addedPartIds, removedPartIds) }
+        postEventPublisher.partUsageChanged(carModelId, addedPartIds, removedPartIds)
     }
 
     // ref 로 태그와 부품을 잇는다. 수정할 때 postPartId 가 있는 부품은 기존 PostPart 를 그대로 쓴다

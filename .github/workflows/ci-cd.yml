@@ -42,7 +42,7 @@ jobs:
 
       # 기본값은 main 에서만 캐시를 저장한다. PR 도 저장해야 같은 PR 의 다음 push 가 테스트 의존성과
       # 임베디드 PostgreSQL 바이너리를 다시 받지 않는다
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: false
 
@@ -72,7 +72,7 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/develop' }}
 

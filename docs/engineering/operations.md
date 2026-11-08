@@ -37,6 +37,11 @@ request its own remote IP or member id.
   `./gradlew :service-user:bootRun` (the `local` profile points at `localhost:5432`, `localhost:19092` and
   `http://localhost:8090/<service>`). Requests to a service started this way must carry `X-Member-Id`
   (and `X-Member-Role`) themselves; Swagger UI (`/swagger-ui.html` on the service port) has a header scheme for it.
+- Production API docs: the public nginx listener returns 404 for them, so open an SSH tunnel to the live slots'
+  localhost ports, e.g. `ssh -N -L 8081:127.0.0.1:8081 -L 8091:127.0.0.1:8091 <server>` for service-user, then
+  `http://localhost:<port>/swagger-ui.html` on the color in `nginx/upstream.conf` (blue 8081-8084, green
+  8091-8094; user, community, car, media). "Try it out" calls the production service directly with whatever
+  `X-Member-Id` / `X-Member-Role` you enter, so treat it as acting as that member.
 - Deploy: `./deploy.sh <image tag>` (e.g. `sha-<commit>`) in the deploy directory. Compose runs four PostgreSQL 17
   containers with pgvector (`db-user`, `db-community`, `db-car`, `db-media`), Kafka (KRaft, single node), two slots
   per service (`user-blue` / `user-green`, `community-*`, `car-*`, `media-*`; compose profiles, so a plain

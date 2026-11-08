@@ -12,8 +12,9 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
 /**
- * 서비스마다 자기 API 문서를 낸다 (로컬·테스트 전용, 운영은 springdoc 을 끈다). 서비스를 직접 부를 때는
- * 게이트웨이 대신 X-Member-Id 헤더를 넣어 로그인한 회원으로 호출한다.
+ * 서비스마다 자기 API 문서를 낸다. 운영에서는 nginx 공개 리스너가 문서 경로를 막고, SSH 터널로 서비스의 호스트
+ * 포트(127.0.0.1)에 붙어서만 본다. 서비스를 직접 부를 때는 게이트웨이 대신 X-Member-Id 헤더를 넣어 로그인한
+ * 회원으로 호출한다.
  */
 @Configuration
 class SwaggerConfig(

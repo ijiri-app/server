@@ -19,7 +19,7 @@ These are invariants. Do not change them without being asked, and keep this docu
   public or admin APIs as a member through it. The public listener blocks `/internal/` with `^~`, so a regex
   location added later cannot route it.
 - Authorization per service: `/internal/**`, `/error` and the API docs are `permitAll` (nginx returns 404 for
-  `/internal/**` and prod disables the docs); each service lists its public paths in its `SecurityConfig`;
+  `/internal/**` and the API docs on the public listener); each service lists its public paths in its `SecurityConfig`;
   `/admin/**` requires `X-Member-Role: ADMIN`; everything else requires `X-Member-Id`.
 - CSRF: cookie tokens are ignored when the request's `Origin` is not in `cors.allowed-origins`; a request from
   an origin outside that list is rejected by the CORS filter (403) before anything else, in every service.
@@ -90,7 +90,8 @@ These are invariants. Do not change them without being asked, and keep this docu
 - Public endpoints: all of `/auth/**` (service-user); GET `/car-models/**` (service-car); GET `/feed`,
   `/posts/{id}`, `/members/{id}/posts` (service-community); with DB storage also GET `/images/**` and
   PUT `/uploads/files/**` (service-media, authenticated by the upload URL signature); the Swagger UI and
-  `/v3/api-docs/**` of each service (served only outside `prod`); `/error`. Every other path requires a member
+  `/v3/api-docs/**` of each service (in `prod` reachable only through an SSH tunnel to the service's
+  localhost port: the public nginx listener answers 404 for `/swagger-ui*` and `/v3/api-docs*`); `/error`. Every other path requires a member
   identified by the gateway. When authenticated, feed, post detail and member post lists also exclude posts of
   members in a block relation (either direction).
 - Uploads: the app crops, resizes, strips location data, masks plates and converts to JPEG/WebP, then PUTs

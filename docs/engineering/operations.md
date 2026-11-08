@@ -61,10 +61,11 @@ request its own remote IP or member id.
   version (add first, drop or rename in a later release), `/internal` contracts and Kafka messages must stay
   readable by the previous version, and `@Scheduled` jobs must stay idempotent.
 - CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` and pushes run `./gradlew test` (a new push to
-  a PR cancels its previous run; branch pushes are never cancelled). Pushes skip docs-only changes and, only
-  after the tests pass, build every service jar with the Gradle cache, then build
-  (`--target ci --build-arg MODULE=<module>`) and push `ghcr.io/ijiri-app/server-<name>:<branch>` and
-  `:sha-<commit>` for `user`, `community`, `car` and `media`; pushes to `main` deploy (only when the repository
+  a PR cancels its previous run; branch pushes are never cancelled). Pushes skip docs-only changes and, in
+  parallel with the tests, build every service jar with the Gradle cache, then build the four images at once
+  (`--target ci --build-arg MODULE=<module>`) and push `ghcr.io/ijiri-app/server-<name>:sha-<commit>` for
+  `user`, `community`, `car` and `media`. Only when both pass does `promote` copy the manifests to the branch tag
+  (`:<branch>`), so an image whose tests failed is never tagged or deployed; pushes to `main` then deploy (only when the repository
   variable `DEPLOY_ENABLED` is `true`) through the self-hosted runner labeled `ijiri-server`, which copies
   `docker-compose.yml`, `deploy.sh`, `nginx/default.conf` and `nginx/proxy.inc` into the repository variable
   `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live) and runs `./deploy.sh sha-<commit>`. Deploys run

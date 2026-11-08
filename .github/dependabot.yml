@@ -1,0 +1,19 @@
+# 매주 GitHub Actions, Gradle 의존성, Docker 베이스 이미지의 새 버전을 PR 로 올린다 (develop 대상)
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+  - package-ecosystem: gradle
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+  - package-ecosystem: docker
+    directory: /
+    target-branch: develop
+    schedule:
+      interval: weekly

@@ -20,7 +20,8 @@ typealias RequestMatcherRegistry =
 
 /**
  * 모든 서비스가 같은 보안 설정을 쓴다. 각 서비스의 SecurityConfig 는 build 에 자기 공개 경로만 넘긴다.
- * `/internal` 아래는 내부망에서 다른 서비스만 부르고(nginx 는 404), `/admin` 아래는 게이트웨이가 넘긴 역할(DB 기준)로 막는다.
+ * `/internal` 아래는 내부망에서 다른 서비스만 부르고(nginx 는 404), `/actuator/health` 는 배포 스크립트가 호스트에서
+ * 기동 확인에 쓴다(nginx 는 404). `/admin` 아래는 게이트웨이가 넘긴 역할(DB 기준)로 막는다.
  */
 @Configuration
 class ServiceSecurityConfig(
@@ -40,8 +41,14 @@ class ServiceSecurityConfig(
             .cors { it.configurationSource(corsConfigurationSource()) }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests { a ->
-                a.requestMatchers("/internal/**", "/error", "/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**")
-                    .permitAll()
+                a.requestMatchers(
+                    "/internal/**",
+                    "/error",
+                    "/actuator/health/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/v3/api-docs/**",
+                ).permitAll()
                 permit(a)
                 a.requestMatchers("/admin/**").hasRole("ADMIN")
                 a.anyRequest().authenticated()

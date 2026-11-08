@@ -43,10 +43,16 @@ request its own remote IP or member id.
   `docker compose up -d` starts none of them), nginx and Cloudflare Tunnel. The tunnel's public hostname points to
   `http://nginx:80`; nginx routes by path to the slot named in `nginx/upstream.conf`, which `deploy.sh` writes for
   all four services at once, and serves the internal listener on port 81 for calls between services.
-  `deploy.sh` starts the new image of every service on its idle slot, waits until each answers HTTP on its
-  localhost port (blue 8081-8084, green 8091-8094), switches nginx with one reload, then stops the old slots
-  after a short drain (Spring graceful shutdown, `stop_grace_period: 40s`). If any slot does not start, nginx is
-  left untouched and the new slots are stopped. It keeps the 3 newest images per service for rollback.
+  `deploy.sh` first removes containers no longer in the compose file (`--remove-orphans`, e.g. the monolith's
+  `app-*` and `db`; volumes stay), starts the new image of every service on its idle slot, waits until
+  `/actuator/health/readiness` (readiness state and DB) answers 200 on its localhost port (blue 8081-8084,
+  green 8091-8094), switches nginx with one reload and smoke-tests `GET /car-models` through the public
+  listener (gateway auth plus a service). If the smoke test fails, nginx goes back to the previous slots, which
+  are still running. Otherwise it removes the old slots after a short drain (Spring graceful shutdown,
+  `stop_grace_period: 40s`) and deletes every local image except the deployed tag (including the monolith's
+  `ghcr.io/ijiri-app/server`); a rollback pulls its tag from GHCR again. If any slot is not ready, nginx is left
+  untouched and the new slots are stopped. Only `health` is exposed under `/actuator`, and nginx answers 404 for
+  `/actuator/` on the public listener.
   nginx listens on 127.0.0.1:8080 (public) and 127.0.0.1:8090 (internal), the slots on their localhost ports,
   Kafka on 127.0.0.1:19092 and the databases on 5432-5435, all on the host's localhost only; only the tunnel
   exposes the API. Remove everything with `docker compose --profile '*' down`.
@@ -54,14 +60,18 @@ request its own remote IP or member id.
   Kafka group and both apply to the same databases: Flyway migrations must stay compatible with the previous
   version (add first, drop or rename in a later release), `/internal` contracts and Kafka messages must stay
   readable by the previous version, and `@Scheduled` jobs must stay idempotent.
-- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` run `./gradlew test` and save the Gradle cache.
-  Pushes skip tests and docs-only changes, build every service jar with the Gradle cache, then build
+- CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` and pushes run `./gradlew test` (a new push to
+  a PR cancels its previous run; branch pushes are never cancelled). Pushes skip docs-only changes and, only
+  after the tests pass, build every service jar with the Gradle cache, then build
   (`--target ci --build-arg MODULE=<module>`) and push `ghcr.io/ijiri-app/server-<name>:<branch>` and
   `:sha-<commit>` for `user`, `community`, `car` and `media`; pushes to `main` deploy (only when the repository
   variable `DEPLOY_ENABLED` is `true`) through the self-hosted runner labeled `ijiri-server`, which copies
   `docker-compose.yml`, `deploy.sh`, `nginx/default.conf` and `nginx/proxy.inc` into the repository variable
-  `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live) and runs `./deploy.sh sha-<commit>`. Roll back by
-  running `./deploy.sh sha-<older commit>` in `DEPLOY_DIR`; all four services move together.
+  `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live) and runs `./deploy.sh sha-<commit>`. Deploys run
+  one at a time (`deploy-production` concurrency group, never cancelled). Roll back or redeploy with
+  Actions > CI/CD > Run workflow on `main` with `image_tag` = `sha-<older commit>` (or `./deploy.sh` in
+  `DEPLOY_DIR`); all four services move together. Dependabot opens weekly PRs to `develop` for Actions, Gradle
+  and the Docker base images.
 
 ## Operational notes
 

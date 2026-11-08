@@ -1,0 +1,20 @@
+spring:
+  jpa:
+    show-sql: true
+  # compose 의 db-media 가 호스트에 여는 포트
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5435/ijiri_media}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+# 로컬은 nginx 게이트웨이(localhost:8080)를 거쳐 이 서비스의 /images, /uploads/files 로 온다
+storage:
+  public-base-url: ${STORAGE_PUBLIC_BASE_URL:http://localhost:8080/images}
+  db:
+    # DB 저장소가 발급하는 업로드 URL 의 앞부분 (게이트웨이 주소)
+    server-url: ${STORAGE_DB_SERVER_URL:http://localhost:8080}
+    # 업로드 URL 서명용 비밀값
+    secret: ${STORAGE_DB_SECRET:ijiri-local-upload-secret-0123456789abcdef}

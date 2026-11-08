@@ -1,0 +1,60 @@
+spring:
+  application:
+    name: service-car
+
+  # 프로필을 지정하지 않으면 로컬 설정으로 뜬다. 운영은 SPRING_PROFILES_ACTIVE=prod
+  profiles:
+    default: local
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  # 스키마는 Flyway 마이그레이션(db/migration)으로만 바꾼다. Hibernate 는 엔티티와 대조만 한다
+  flyway:
+    enabled: true
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+
+  jackson:
+    mapper:
+      # category 를 "chassis" 처럼 소문자로 보내도 enum 으로 받는다
+      accept-case-insensitive-enums: true
+
+  # 메시지는 JSON 문자열. part.usage-changed 를 구독해 부품 사용 수를 맞춘다
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: service-car
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# 배포 스크립트(deploy.sh)가 /actuator/health/readiness 로 기동을 확인한다. health 외의 엔드포인트는 열지 않는다.
+# readiness 는 DB 연결까지 본다 (메일 서버처럼 잠깐 끊겨도 서비스할 수 있는 의존성은 넣지 않는다)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS}

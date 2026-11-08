@@ -1,0 +1,90 @@
+package ijiri.ijiriserver.common.jwt
+
+import io.jsonwebtoken.Claims
+import io.jsonwebtoken.JwtException
+import io.jsonwebtoken.JwtParser
+import io.jsonwebtoken.Jwts
+import io.jsonwebtoken.security.Keys
+import java.nio.charset.StandardCharsets
+import java.time.Clock
+import java.util.Date
+import javax.crypto.SecretKey
+
+/**
+ * access/refresh token 발급과 검증. 토큰을 다루는 service-user 만 빈으로 만든다 (JwtConfig).
+ */
+class JwtProvider(
+    secret: String,
+    accessTokenValiditySeconds: Long,
+    refreshTokenValiditySeconds: Long,
+    private val clock: Clock,
+) {
+
+    private val key: SecretKey = Keys.hmacShaKeyFor(secret.toByteArray(StandardCharsets.UTF_8))
+    private val accessTokenValidityMillis: Long = accessTokenValiditySeconds * 1000
+    private val refreshTokenValidityMillis: Long = refreshTokenValiditySeconds * 1000
+
+    // 발급과 만료 검사가 같은 Clock 을 보도록 파서에도 넣는다. 파서는 불변이라 한 번만 만들어 재사용한다
+    private val parser: JwtParser = Jwts.parser()
+        .verifyWith(key)
+        .clock { Date.from(clock.instant()) }
+        .build()
+
+    fun createAccessToken(subject: String, role: String, sessionId: String): String {
+        val now = Date.from(clock.instant())
+        return Jwts.builder()
+            .subject(subject)
+            .claim(ROLE_CLAIM, role)
+            .claim(SESSION_CLAIM, sessionId)
+            .claim(TYPE_CLAIM, ACCESS_TYPE)
+            .issuedAt(now)
+            .expiration(Date(now.time + accessTokenValidityMillis))
+            .signWith(key)
+            .compact()
+    }
+
+    fun createRefreshToken(subject: String, sessionId: String): String {
+        val now = Date.from(clock.instant())
+        return Jwts.builder()
+            .subject(subject)
+            .id(sessionId)
+            .claim(TYPE_CLAIM, REFRESH_TYPE)
+            .issuedAt(now)
+            .expiration(Date(now.time + refreshTokenValidityMillis))
+            .signWith(key)
+            .compact()
+    }
+
+    fun getAccessTokenValiditySeconds(): Long = accessTokenValidityMillis / 1000
+
+    fun getRefreshTokenValiditySeconds(): Long = refreshTokenValidityMillis / 1000
+
+    // 서명·만료·토큰 종류를 한 번의 파싱으로 검증하고, 이후 필요한 값은 이 claims 에서 꺼낸다
+    fun parseAccessToken(token: String): Claims? = parseWithType(token, ACCESS_TYPE)
+
+    fun parseRefreshToken(token: String): Claims? = parseWithType(token, REFRESH_TYPE)
+
+    private fun parseWithType(token: String, type: String): Claims? =
+        try {
+            parse(token).takeIf { type == it.get(TYPE_CLAIM, String::class.java) }
+        } catch (e: JwtException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+
+    fun getSessionId(accessClaims: Claims): String? = accessClaims.get(SESSION_CLAIM, String::class.java)
+
+    private fun parse(token: String): Claims = parser.parseSignedClaims(token).payload
+
+    companion object {
+        private const val ROLE_CLAIM = "role"
+
+        private const val TYPE_CLAIM = "type"
+
+        // access token 이 속한 로그인 세션. refresh token 의 jti 와 같은 값
+        private const val SESSION_CLAIM = "sid"
+        private const val ACCESS_TYPE = "access"
+        private const val REFRESH_TYPE = "refresh"
+    }
+}

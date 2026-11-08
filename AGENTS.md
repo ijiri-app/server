@@ -26,6 +26,8 @@ forwards the result to the services as `X-Member-Id` / `X-Member-Role`.
 - Final report in Korean, concise, no emoji: what changed, why, and which checks ran.
 - Do not commit unless explicitly asked. For multi-file or multi-concern changes, propose a commit plan
   (see `docs/engineering/commit-convention.md`).
+- Never add AI attribution to commits, PRs, issues or code: no `Co-Authored-By` for an AI, no
+  "Generated with ..." line, no session links.
 - Use available tools and skills (docs lookup, code review, security review) when they materially help.
 - When changing behavior described by the engineering documents, update the relevant document in the
   same change, especially `docs/engineering/security-invariants.md`.

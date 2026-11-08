@@ -41,6 +41,15 @@ class CarFlowIntegrationTest {
     lateinit var objectMapper: ObjectMapper
 
     @Test
+    fun 배포_스크립트의_readiness_확인은_로그인_없이_UP_이다() {
+        mockMvc.perform(get("/actuator/health/readiness"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("UP"))
+        mockMvc.perform(get("/actuator/env"))
+            .andExpect(status().isUnauthorized())
+    }
+
+    @Test
     fun 차종_마스터는_로그인_없이_조회하고_핵심_계열만_거를_수_있다() {
         mockMvc.perform(get("/car-models").param("core", "true"))
             .andExpect(status().isOk())

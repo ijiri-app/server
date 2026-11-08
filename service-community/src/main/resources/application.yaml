@@ -42,6 +42,21 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
 
+# 배포 스크립트(deploy.sh)가 /actuator/health/readiness 로 기동을 확인한다. health 외의 엔드포인트는 열지 않는다.
+# readiness 는 DB 연결까지 본다 (메일 서버처럼 잠깐 끊겨도 서비스할 수 있는 의존성은 넣지 않는다)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS}
 

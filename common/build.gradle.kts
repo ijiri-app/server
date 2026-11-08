@@ -16,7 +16,7 @@ dependencies {
     implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
     api("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
     api("io.jsonwebtoken:jjwt-api:0.12.6")
-    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
+    runtimeOnly("io.jsonwebtoken:jjwt-impl:0.13.0")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")
     api("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")

@@ -2,7 +2,7 @@
 ARG MODULE=service-user
 
 # 빌드: Gradle 로 실행 가능한 jar 를 만든다 (테스트는 CI/로컬에서 따로 돌린다)
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:25-jdk AS build
 ARG MODULE
 WORKDIR /workspace
 
@@ -21,7 +21,7 @@ COPY ${MODULE} ${MODULE}
 RUN ./gradlew :${MODULE}:bootJar --no-daemon -x test
 
 # 실행: JRE 만 담고 root 가 아닌 사용자로 띄운다
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:25-jre AS runtime
 WORKDIR /app
 RUN groupadd --system app && useradd --system --gid app app
 USER app

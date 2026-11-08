@@ -5,6 +5,8 @@
 - Types: `feat`, `fix`, `refactor`, `chore` (build/config), `docs`, `test`, `style`.
 - One commit represents one logical change. Group files by change, not by file type.
 - Do not commit unless explicitly asked.
+- No AI attribution: no `Co-Authored-By` trailer for an AI tool and no "Generated with ..." line in commit
+  messages or PR descriptions.
 - For multi-file or multi-concern changes, propose a commit plan after the report. Use ready-to-paste
   commands, one `git add -A <paths>` + `git commit` pair per commit, ordered so each commit compiles.
   Keep each command on one line.

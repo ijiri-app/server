@@ -70,7 +70,7 @@ configure(subprojects.filter { it.name.startsWith("service-") }) {
 
     dependencies {
         "implementation"(project(":common"))
-        "implementation"("me.paulschwarz:spring-dotenv:4.0.0")
+        "implementation"("me.paulschwarz:spring-dotenv:5.1.0")
         "testImplementation"("org.springframework.boot:spring-boot-starter-test")
         "testImplementation"("org.springframework.security:spring-security-test")
         // 테스트 DB: Docker 없이 프로세스로 띄우는 PostgreSQL (운영과 같은 17, pg_trgm 포함)

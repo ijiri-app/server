@@ -1,4 +1,6 @@
-# 매주 GitHub Actions, Gradle 의존성, Docker 베이스 이미지의 새 버전을 PR 로 올린다 (develop 대상)
+# 매주 develop 으로 의존성 업데이트 PR 을 연다. 마이너·패치는 생태계마다 PR 하나로 묶고, 메이저 업데이트는 열지 않는다
+# (Spring Boot 4, Java 25, Actions 의 새 메이저처럼 코드나 설정을 함께 바꿔야 하는 업그레이드는 따로 계획해서 올린다).
+# Spring Boot BOM 이 버전을 정하는 의존성은 Boot 플러그인 버전을 올릴 때 함께 올라간다.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -6,14 +8,31 @@ updates:
     target-branch: develop
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+    groups:
+      actions:
+        patterns: ["*"]
+
   - package-ecosystem: gradle
     directory: /
     target-branch: develop
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]
+    groups:
+      gradle:
+        patterns: ["*"]
+
+  # 런타임 이미지의 Java 버전은 Gradle toolchain(21)과 맞춰야 하므로 메이저(21 -> 25)는 열지 않는다
   - package-ecosystem: docker
     directory: /
     target-branch: develop
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: "*"
+        update-types: [version-update:semver-major]

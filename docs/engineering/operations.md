@@ -72,7 +72,8 @@ request its own remote IP or member id.
   one at a time (`deploy-production` concurrency group, never cancelled). Roll back or redeploy with
   Actions > CI/CD > Run workflow on `main` with `image_tag` = `sha-<older commit>` (or `./deploy.sh` in
   `DEPLOY_DIR`); all four services move together. Dependabot opens weekly PRs to `develop` for Actions, Gradle
-  and the Docker base images.
+  and the Docker base images: minor and patch updates grouped into one PR per ecosystem, no major updates
+  (plan those, e.g. Spring Boot 4 or Java 25, as their own change).
 
 ## Operational notes
 

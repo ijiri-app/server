@@ -30,14 +30,14 @@ current_color() {
 # readiness 가 200(UP)이면 요청을 받을 준비가 된 것이다 (Flyway 마이그레이션, DB 연결 포함)
 wait_ready() {
     local container=$1
-    for _ in $(seq 1 90); do
+    for _ in $(seq 1 180); do
         if [ -z "$(docker compose ps -q --status running "$container")" ]; then
             return 1
         fi
         if curl -fs -o /dev/null -m 2 "http://127.0.0.1:$(port_of "$container")/actuator/health/readiness"; then
             return 0
         fi
-        sleep 2
+        sleep 1
     done
     return 1
 }
@@ -53,10 +53,14 @@ smoke_test() {
     return 1
 }
 
+# 슬롯 이름을 한 번에 넘겨 compose 가 동시에 처리하게 한다
+next_slots() {
+    for i in "${!SERVICES[@]}"; do printf '%s-%s\n' "${SERVICES[$i]}" "${NEXT[$i]}"; done
+}
+
 stop_next() {
-    for i in "${!SERVICES[@]}"; do
-        docker compose stop "${SERVICES[$i]}-${NEXT[$i]}"
-    done
+    # shellcheck disable=SC2046
+    docker compose stop $(next_slots)
 }
 
 # --remove-orphans: compose 파일에서 빠진 컨테이너(모놀리식 app-blue/green, 단일 db)를 지운다. 볼륨은 남는다
@@ -67,8 +71,10 @@ for i in "${!SERVICES[@]}"; do
     CURRENT[$i]=$(current_color "$s")
     if [ "${CURRENT[$i]}" = blue ]; then NEXT[$i]=green; else NEXT[$i]=blue; fi
     echo "$s: current ${CURRENT[$i]:-none}, deploying $TAG to ${NEXT[$i]}"
-    IMAGE_TAG=$TAG docker compose up -d --no-deps --force-recreate --pull missing "$s-${NEXT[$i]}"
 done
+# 네 서비스의 이미지를 동시에 받고 동시에 띄운다
+# shellcheck disable=SC2046
+IMAGE_TAG=$TAG docker compose up -d --no-deps --force-recreate --pull missing $(next_slots)
 
 started=true
 for i in "${!SERVICES[@]}"; do
@@ -122,12 +128,16 @@ fi
 # reload 전에 받은 요청은 이전 nginx worker 가 마저 처리한다. 잠깐 기다린 뒤 이전 색을 내리고 컨테이너를 지운다
 # (멈춘 컨테이너가 남아 있으면 그 이미지를 지울 수 없다)
 sleep 5
+previous_slots=()
 for i in "${!SERVICES[@]}"; do
-    s=${SERVICES[$i]}
     if [ -n "${CURRENT[$i]}" ]; then
-        docker compose rm -sf "$s-${CURRENT[$i]}"
+        previous_slots+=("${SERVICES[$i]}-${CURRENT[$i]}")
     fi
 done
+# 동시에 멈추고 지운다 (각자 graceful shutdown 을 기다린다)
+if [ "${#previous_slots[@]}" -gt 0 ]; then
+    docker compose rm -sf "${previous_slots[@]}"
+fi
 
 # 지금 띄운 태그 말고는 이미지를 남기지 않는다. 되돌릴 때는 ./deploy.sh <이전 SHA 태그> 가 GHCR 에서 다시 받는다.
 # 모놀리식 시절 이미지(ghcr.io/ijiri-app/server)도 함께 지운다

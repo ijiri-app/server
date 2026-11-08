@@ -14,7 +14,7 @@ dependencies {
     api("com.fasterxml.jackson.module:jackson-module-kotlin")
     api("org.jetbrains.kotlin:kotlin-reflect")
     implementation("io.github.resilience4j:resilience4j-circuitbreaker:2.4.0")
-    api("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.17")
+    api("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0")
     api("io.jsonwebtoken:jjwt-api:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-impl:0.12.6")
     runtimeOnly("io.jsonwebtoken:jjwt-jackson:0.12.6")

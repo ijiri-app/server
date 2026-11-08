@@ -1,6 +1,6 @@
 # Commit convention
 
-- Commit messages are always in English.
+- Commit messages and PR titles are always in English; PR descriptions are written in Korean.
 - Format: `<type>: <summary>`, imperative mood, no scope, no trailing period, max 72 chars.
 - Types: `feat`, `fix`, `refactor`, `chore` (build/config), `docs`, `test`, `style`.
 - One commit represents one logical change. Group files by change, not by file type.

@@ -11,6 +11,9 @@ spring:
     bootstrap-servers: localhost:9092
     listener:
       auto-startup: false
+    # 브로커가 없으므로 기동 때 토픽을 만들러 접속하지 않는다 (토픽이 있는 서비스는 재시도로 40초쯤 늦게 떴다)
+    admin:
+      auto-create: false
 
 cors:
   allowed-origins: http://localhost:3000

@@ -6,6 +6,8 @@ import ijiri.ijiriserver.common.exception.CommonStatusCode
 import ijiri.ijiriserver.common.exception.CustomException
 import ijiri.ijiriserver.common.exception.RemoteStatusCode
 import ijiri.ijiriserver.common.response.BaseResponse
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException
+import io.github.resilience4j.circuitbreaker.CircuitBreaker
 import org.slf4j.LoggerFactory
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.HttpRequest
@@ -18,9 +20,12 @@ import org.springframework.web.client.RestClientException
 /**
  * 다른 서비스의 /internal API 호출. 응답 본문은 BaseResponse 이며, 오류 응답은 그 code·message 를 담은
  * CustomException 으로 바꿔 던지고(RemoteStatusCode), 연결 실패나 깨진 응답은 SERVICE_UNAVAILABLE 로 답한다.
+ * 상대 서비스가 계속 실패하면 서킷이 열려 잠시 동안 부르지 않고 바로 SERVICE_UNAVAILABLE 로 답한다
+ * (요청 스레드가 타임아웃까지 묶이며 장애가 호출한 서비스로 번지지 않게).
  */
 class InternalClient(
     @PublishedApi internal val restClient: RestClient,
+    private val circuitBreaker: CircuitBreaker,
 ) {
 
     inline fun <reified T : Any> get(uri: String, vararg uriVariables: Any): T =
@@ -54,9 +59,15 @@ class InternalClient(
 
     private fun <T> call(action: () -> T): T {
         try {
-            return action()
-        } catch (e: RestClientException) {
-            throw unavailable(e.message)
+            return circuitBreaker.executeSupplier {
+                try {
+                    action()
+                } catch (e: RestClientException) {
+                    throw unavailable(e.message)
+                }
+            }
+        } catch (e: CallNotPermittedException) {
+            throw unavailable("circuit open: ${circuitBreaker.name}")
         }
     }
 

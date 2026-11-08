@@ -61,10 +61,11 @@ request its own remote IP or member id.
   version (add first, drop or rename in a later release), `/internal` contracts and Kafka messages must stay
   readable by the previous version, and `@Scheduled` jobs must stay idempotent.
 - CI/CD (`.github/workflows/ci-cd.yml`): PRs to `develop`/`main` and pushes run `./gradlew test` (a new push to
-  a PR cancels its previous run; branch pushes are never cancelled). Pushes skip docs-only changes and, only
-  after the tests pass, build every service jar with the Gradle cache, then build
-  (`--target ci --build-arg MODULE=<module>`) and push `ghcr.io/ijiri-app/server-<name>:<branch>` and
-  `:sha-<commit>` for `user`, `community`, `car` and `media`; pushes to `main` deploy (only when the repository
+  a PR cancels its previous run; branch pushes are never cancelled). Pushes skip docs-only changes and, in
+  parallel with the tests, build every service jar with the Gradle cache, then build the four images at once
+  (`--target ci --build-arg MODULE=<module>`) and push `ghcr.io/ijiri-app/server-<name>:sha-<commit>` for
+  `user`, `community`, `car` and `media`. Only when both pass does `promote` copy the manifests to the branch tag
+  (`:<branch>`), so an image whose tests failed is never tagged or deployed; pushes to `main` then deploy (only when the repository
   variable `DEPLOY_ENABLED` is `true`) through the self-hosted runner labeled `ijiri-server`, which copies
   `docker-compose.yml`, `deploy.sh`, `nginx/default.conf` and `nginx/proxy.inc` into the repository variable
   `DEPLOY_DIR` (where `.env` and `nginx/upstream.conf` live) and runs `./deploy.sh sha-<commit>`. Deploys run
@@ -85,10 +86,12 @@ Not problems today; revisit when the deployment changes.
   target service runs; add a cache if traffic grows.
 - Internal calls go through the nginx internal listener, so a service is unreachable while nginx reloads or
   before the first deploy wrote `nginx/upstream.conf`. Callers answer `SERVICE_UNAVAILABLE` (502) meanwhile.
-- Kafka delivers at least once and a failing listener is retried by Spring Kafka's default error handler, then
-  skipped with a log. A skipped `member.purged` leaves community or media data of a purged member behind, a lost
-  `post.deleted` leaves files in storage, a repeated `part.usage-changed` drifts a ranking counter. Watch the
-  consumer logs; there is no dead-letter topic yet.
+- Kafka delivers at least once. A listener that still fails after about a minute of backoff moves the message to
+  `<topic>.<consumer group>.DLT` (e.g. `member.purged.service-media.DLT`). A message left there means a purged
+  member's data or files remain, so check the DLT topics after incidents
+  (`kafka-console-consumer.sh --topic <dlt> --from-beginning` in the kafka container) and replay them to the
+  original topic once the cause is fixed. Unsent messages wait in `outbox_message` (service-user,
+  service-community) while the broker is down; a growing table means the relay is failing.
 - `forward-headers-strategy: native` trusts `X-Forwarded-For` only from Tomcat's internal proxy ranges. nginx and
   cloudflared are on the compose network, so the client IP arrives; check again if the proxies move.
 - Images: prod uses Cloudflare R2 (`storage.type = r2`, `R2_*` env) behind a custom domain
